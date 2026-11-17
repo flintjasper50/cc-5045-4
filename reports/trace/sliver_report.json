@@ -1,0 +1,947 @@
+{
+  "scene": {
+    "key": "sliver",
+    "title": "细三角形 / 亚像素覆盖",
+    "description": "26 个窄楔形与针状三角形，尖端不足一像素，检验边缘函数与覆盖归属。"
+  },
+  "config": {
+    "scene": "sliver",
+    "triangle_count": 27,
+    "width": 64,
+    "height": 64,
+    "camera": {
+      "fovy": 45.0,
+      "near": 0.1,
+      "far": 40.0,
+      "eye": [
+        0.0,
+        0.0,
+        5.0
+      ],
+      "target": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "light_dir": [
+      0.3,
+      0.9,
+      0.8
+    ],
+    "exposure": 1.0,
+    "texture": "procedural_checker_8x8_linear_wrap",
+    "color_pipeline": "linear Blinn-Phong -> Reinhard -> sRGB OETF",
+    "coord_system": "right-handed, camera looks -Z, NDC z in [-1,1]",
+    "python": "3.11.2",
+    "platform": "Linux-7.0.14-linuxkit-aarch64-with-glibc2.36",
+    "fill_convention": "center-sample (x+0.5,y+0.5), top-left >=0",
+    "config_sha256": "66505a1babce58c27b67f9c10f807bbb29bdd935eac592e708bc8660c5da4de2"
+  },
+  "gpu_status": {
+    "gpu_detected": false,
+    "gpu_hardware": null,
+    "cuda_module": null,
+    "gpu_can_execute": false,
+    "coverage": "本次覆盖：两条真实 CPU 计算实现(f64 参考 / f32 分块)实际执行并比较。GPU 路径因无可用设备或计算栈而未执行——未伪造任何 GPU 输出。接入 CUDA 后同一接口可启用第三路径。"
+  },
+  "devices": [
+    {
+      "id": "cpu_ref",
+      "label": "CPU 参考路径 (标量 f64，逐三角形)",
+      "kind": "cpu",
+      "precision": "float64",
+      "available": true,
+      "executed_note": "始终可运行：纯标准库标量光栅化，作为参考真值。"
+    },
+    {
+      "id": "vector_f32",
+      "label": "向量化计算路径 (分块逐像素，f32，GPU top-left 填充)",
+      "kind": "cpu-simd",
+      "precision": "float32 (binary32 舍入)",
+      "available": true,
+      "executed_note": "始终可运行：分块逐像素、f32 运算，模拟 GPU 单精度数据通路。"
+    },
+    {
+      "id": "gpu_cuda",
+      "label": "GPU 渲染路径 (CUDA/单精度)",
+      "kind": "gpu",
+      "precision": "float32",
+      "available": false,
+      "executed_note": "未检测到可用 GPU 设备/驱动；GPU 路径标记为未执行，不生成任何 GPU 图像。"
+    }
+  ],
+  "executed": [
+    "cpu_ref",
+    "vector_f32"
+  ],
+  "skipped": [
+    "gpu_cuda"
+  ],
+  "renders": {
+    "cpu_ref": {
+      "device": "cpu_ref",
+      "label": "CPU 参考路径 (标量 f64，逐三角形)",
+      "kind": "cpu",
+      "precision": "f64",
+      "elapsed_ms": 12.768,
+      "covered_count": 1459
+    },
+    "vector_f32": {
+      "device": "vector_f32",
+      "label": "向量化计算路径 (分块逐像素，f32，GPU top-left 填充)",
+      "kind": "cpu-simd",
+      "precision": "f32",
+      "elapsed_ms": 196.252,
+      "covered_count": 1459
+    }
+  },
+  "comparisons": [
+    {
+      "reference": "cpu_ref",
+      "test": "vector_f32",
+      "verdict": {
+        "class": "precision_only",
+        "title": "仅数值精度偏差",
+        "description": "两路径覆盖与对象标识完全一致，差异处于 f32/f64 舍入可解释范围内，属正常数值精度偏差。",
+        "reasons": [],
+        "pass": true
+      },
+      "stats": {
+        "edge": {
+          "srgb_abs": {
+            "sum": 3.741900376319496e-05,
+            "max": 3.557811366072805e-07,
+            "count": 4290,
+            "mean": 8.722378499579245e-09,
+            "p99": 2.988614455912142e-08,
+            "rmse": 1.3122156999127566e-08
+          },
+          "srgb_rel": {
+            "sum": 7.052690818990124e-05,
+            "max": 8.840163812015609e-07,
+            "count": 4290,
+            "mean": 1.6439838738904716e-08,
+            "p99": 6.270890778906256e-08,
+            "rmse": 2.76481135632765e-08
+          },
+          "linear_abs": {
+            "sum": 7.926281756390208e-05,
+            "max": 3.354649801556864e-07,
+            "count": 4290,
+            "mean": 1.8476181250326824e-08,
+            "p99": 7.368381005345981e-08,
+            "rmse": 2.6222892324118634e-08
+          },
+          "depth_abs": {
+            "sum": 5.606775386102214e-05,
+            "max": 1.9345367152645565e-07,
+            "count": 1430,
+            "mean": 3.9208219483232266e-08,
+            "p99": 1.3384902675106503e-07,
+            "rmse": 5.12448854552859e-08
+          }
+        },
+        "interior": {
+          "srgb_abs": {
+            "sum": 8.010565140659232e-07,
+            "max": 2.8742983548823986e-08,
+            "count": 87,
+            "mean": 9.207546138688772e-09,
+            "p99": 2.8742983548823986e-08,
+            "rmse": 1.1297471139803454e-08
+          },
+          "srgb_rel": {
+            "sum": 1.4779621808179946e-06,
+            "max": 6.555529127023692e-08,
+            "count": 87,
+            "mean": 1.6988071043884994e-08,
+            "p99": 6.555529127023692e-08,
+            "rmse": 2.1187682707146676e-08
+          },
+          "linear_abs": {
+            "sum": 1.7452009463403417e-06,
+            "max": 6.546760389358752e-08,
+            "count": 87,
+            "mean": 2.005978099241772e-08,
+            "p99": 6.546760389358752e-08,
+            "rmse": 2.563393363091504e-08
+          },
+          "depth_abs": {
+            "sum": 1.08438625578966e-06,
+            "max": 1.3384902675106503e-07,
+            "count": 29,
+            "mean": 3.7392629509988274e-08,
+            "p99": 1.3384902675106503e-07,
+            "rmse": 4.9860619234778203e-08
+          }
+        },
+        "all_srgb_abs": {
+          "sum": 3.822006027726088e-05,
+          "max": 3.557811366072805e-07,
+          "count": 4377,
+          "mean": 8.732021996175663e-09,
+          "p99": 2.974926727183913e-08,
+          "rmse": 1.3088366534539304e-08
+        },
+        "all_srgb_rel": {
+          "sum": 7.200487037071925e-05,
+          "max": 8.840163812015609e-07,
+          "count": 4377,
+          "mean": 1.6450735748393705e-08,
+          "p99": 6.270890778906256e-08,
+          "rmse": 2.7534471156376322e-08
+        },
+        "all_linear_abs": {
+          "sum": 8.100801851024242e-05,
+          "max": 3.354649801556864e-07,
+          "count": 4377,
+          "mean": 1.850765787302774e-08,
+          "p99": 7.344865726732763e-08,
+          "rmse": 2.6211314718038842e-08
+        },
+        "all_depth_abs": {
+          "sum": 5.71521401168118e-05,
+          "max": 1.9345367152645565e-07,
+          "count": 1459,
+          "mean": 3.917213167704715e-08,
+          "p99": 1.3384902675106503e-07,
+          "rmse": 5.121773534059776e-08
+        },
+        "pixels_total": 4096,
+        "background_pixels": 2637,
+        "model_union_pixels": 1459,
+        "coverage_both": 1459,
+        "coverage_ref_only": 0,
+        "coverage_test_only": 0,
+        "edge_band_pixels": 1430,
+        "interior_pixels": 29,
+        "nonfinite": {
+          "count": 0,
+          "samples": []
+        }
+      },
+      "structural": {
+        "ref_only_count": 0,
+        "test_only_count": 0,
+        "ref_only_indices": [],
+        "test_only_indices": [],
+        "id_mismatch": [],
+        "depth_far_mismatch": [],
+        "total": 0
+      },
+      "nonfinite": {
+        "count": 0,
+        "samples": []
+      },
+      "tolerance": {
+        "srgb_abs_max": 0.00196078431372549,
+        "srgb_abs_p99": 0.000980392156862745,
+        "color_rel_eps": 0.0001,
+        "color_rel_max": 0.02,
+        "depth_rel_eps": 1e-07,
+        "depth_abs_hard": 0.0001,
+        "depth_abs_typical": 1e-06,
+        "coverage_tolerance": 0,
+        "provenance": {
+          "srgb_abs_max": "0.5/255：8 位 sRGB 半个量化步长，f32 正确舍入不应超过。",
+          "srgb_abs_p99": "0.25/255：99 分位收紧到四分之一步长，防止个别高光像素掩盖系统性偏差。",
+          "color_rel_eps": "1e-4：暗部相对误差分母下限，低于此值改用绝对误差判定。",
+          "depth_abs_hard": "1e-4：超过即判深度对应错误；典型 f32 深度舍入约 1e-6~1e-7。",
+          "coverage_tolerance": "覆盖/对象标识无容差，任何不一致都按结构错误上报。"
+        }
+      }
+    }
+  ],
+  "pixel_trace": {
+    "pixel": [
+      32,
+      32
+    ],
+    "index": 2080,
+    "paths": {
+      "cpu_ref": {
+        "trace": [
+          {
+            "triangle": 0,
+            "obj_id": 1,
+            "weights": [
+              204.5226337051761,
+              26.721659893991415,
+              -24.721546878700494
+            ],
+            "area": 206.52274672046704,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 1,
+            "obj_id": 2,
+            "weights": [
+              205.10171139835427,
+              31.340472391593607,
+              -29.919437069481006
+            ],
+            "area": 206.5227467204669,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 2,
+            "obj_id": 3,
+            "weights": [
+              205.76337449920078,
+              34.137890551778355,
+              -33.37851833051207
+            ],
+            "area": 206.52274672046724,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 3,
+            "obj_id": 4,
+            "weights": [
+              206.46916955334152,
+              34.95133859927728,
+              -34.897761432151356
+            ],
+            "area": 206.52274672046724,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 4,
+            "obj_id": 1,
+            "weights": [
+              207.17807831769042,
+              33.73354189033262,
+              -34.38887348755558
+            ],
+            "area": 206.52274672046747,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 5,
+            "obj_id": 2,
+            "weights": [
+              207.84890159164127,
+              30.55527434315775,
+              -31.881429214332215
+            ],
+            "area": 206.52274672046667,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 6,
+            "obj_id": 3,
+            "weights": [
+              208.44265356485715,
+              25.60124531506157,
+              -27.52115215945193
+            ],
+            "area": 206.5227467204668,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 7,
+            "obj_id": 4,
+            "weights": [
+              208.9248275308548,
+              19.15936496599454,
+              -21.561445776382133
+            ],
+            "area": 206.52274672046713,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 8,
+            "obj_id": 1,
+            "weights": [
+              209.2674012913606,
+              11.604011966561984,
+              -14.348666537455545
+            ],
+            "area": 206.522746720467,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 9,
+            "obj_id": 2,
+            "weights": [
+              209.45046570461915,
+              3.3742759705000935,
+              -6.301994954652802
+            ],
+            "area": 206.52274672046633,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 10,
+            "obj_id": 3,
+            "weights": [
+              209.46338173234506,
+              -5.051560679973136,
+              2.1109256680947546
+            ],
+            "area": 206.52274672046656,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 11,
+            "obj_id": 4,
+            "weights": [
+              209.30539874195495,
+              -13.183818985402354,
+              10.401166963915216
+            ],
+            "area": 206.52274672046792,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 12,
+            "obj_id": 1,
+            "weights": [
+              208.98569813060206,
+              -20.549881652632052,
+              18.086930242496592
+            ],
+            "area": 206.52274672046656,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 13,
+            "obj_id": 2,
+            "weights": [
+              208.52285973575655,
+              -26.721659893991415,
+              24.7215468787005
+            ],
+            "area": 206.52274672046562,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 14,
+            "obj_id": 3,
+            "weights": [
+              207.94378204258044,
+              -31.34047239159372,
+              29.919437069481006
+            ],
+            "area": 206.5227467204678,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 15,
+            "obj_id": 4,
+            "weights": [
+              207.28211894173407,
+              -34.13789055177858,
+              33.378518330512065
+            ],
+            "area": 206.5227467204678,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 16,
+            "obj_id": 1,
+            "weights": [
+              206.57632388759453,
+              -34.95133859927705,
+              34.89776143215136
+            ],
+            "area": 206.52274672046883,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 17,
+            "obj_id": 2,
+            "weights": [
+              205.86741512324375,
+              -33.733541890332845,
+              34.38887348755558
+            ],
+            "area": 206.52274672046678,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 18,
+            "obj_id": 3,
+            "weights": [
+              205.19659184929432,
+              -30.55527434315775,
+              31.881429214332222
+            ],
+            "area": 206.52274672046894,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 19,
+            "obj_id": 4,
+            "weights": [
+              204.60283987607852,
+              -25.60124531506156,
+              27.521152159451944
+            ],
+            "area": 206.5227467204689,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 20,
+            "obj_id": 1,
+            "weights": [
+              204.1206659100792,
+              -19.159364965994484,
+              21.561445776382126
+            ],
+            "area": 206.52274672046678,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 21,
+            "obj_id": 2,
+            "weights": [
+              203.77809214957284,
+              -11.60401196656187,
+              14.348666537455543
+            ],
+            "area": 206.52274672046656,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 22,
+            "obj_id": 3,
+            "weights": [
+              203.59502773631783,
+              -3.374275970499866,
+              6.301994954652834
+            ],
+            "area": 206.52274672047065,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 23,
+            "obj_id": 4,
+            "weights": [
+              203.58211170859045,
+              5.051560679973136,
+              -2.110925668094737
+            ],
+            "area": 206.52274672046883,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 24,
+            "obj_id": 1,
+            "weights": [
+              203.74009469897948,
+              13.183818985402354,
+              -10.401166963915244
+            ],
+            "area": 206.52274672046656,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 25,
+            "obj_id": 2,
+            "weights": [
+              204.05979531033108,
+              20.54988165263211,
+              -18.08693024249659
+            ],
+            "area": 206.52274672046656,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 26,
+            "obj_id": 5,
+            "weights": [
+              -24.90319543086446,
+              -114.06904755831238,
+              89.23633152467573
+            ],
+            "area": -49.73591146450053,
+            "inside": false,
+            "depth_before": Infinity
+          }
+        ],
+        "final_srgb": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "final_linear": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "depth": Infinity,
+        "obj_id": 0,
+        "covered": false
+      },
+      "vector_f32": {
+        "trace": [
+          {
+            "triangle": 0,
+            "obj_id": 1,
+            "weights": [
+              204.52264404296875,
+              26.721664428710938,
+              -24.721546173095703
+            ],
+            "area": 206.52276611328125,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 1,
+            "obj_id": 2,
+            "weights": [
+              205.10174560546875,
+              31.3404541015625,
+              -29.919437408447266
+            ],
+            "area": 206.52276611328125,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 2,
+            "obj_id": 3,
+            "weights": [
+              205.7634735107422,
+              34.137939453125,
+              -33.378517150878906
+            ],
+            "area": 206.52288818359375,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 3,
+            "obj_id": 4,
+            "weights": [
+              206.46925354003906,
+              34.9512939453125,
+              -34.897762298583984
+            ],
+            "area": 206.5228271484375,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 4,
+            "obj_id": 1,
+            "weights": [
+              207.17816162109375,
+              33.733642578125,
+              -34.38887405395508
+            ],
+            "area": 206.52276611328125,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 5,
+            "obj_id": 2,
+            "weights": [
+              207.84906005859375,
+              30.55523681640625,
+              -31.88142967224121
+            ],
+            "area": 206.52288818359375,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 6,
+            "obj_id": 3,
+            "weights": [
+              208.44259643554688,
+              25.601242065429688,
+              -27.521150588989258
+            ],
+            "area": 206.52267456054688,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 7,
+            "obj_id": 4,
+            "weights": [
+              208.9247589111328,
+              19.15936279296875,
+              -21.561443328857422
+            ],
+            "area": 206.52267456054688,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 8,
+            "obj_id": 1,
+            "weights": [
+              209.2674102783203,
+              11.60400390625,
+              -14.348666191101074
+            ],
+            "area": 206.52276611328125,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 9,
+            "obj_id": 2,
+            "weights": [
+              209.45045471191406,
+              3.374267578125,
+              -6.301995277404785
+            ],
+            "area": 206.522705078125,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 10,
+            "obj_id": 3,
+            "weights": [
+              209.46337890625,
+              -5.0516357421875,
+              2.1109256744384766
+            ],
+            "area": 206.5228271484375,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 11,
+            "obj_id": 4,
+            "weights": [
+              209.305419921875,
+              -13.18377685546875,
+              10.401166915893555
+            ],
+            "area": 206.5228271484375,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 12,
+            "obj_id": 1,
+            "weights": [
+              208.98568725585938,
+              -20.54986572265625,
+              18.086929321289062
+            ],
+            "area": 206.522705078125,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 13,
+            "obj_id": 2,
+            "weights": [
+              208.5228729248047,
+              -26.721664428710938,
+              24.721546173095703
+            ],
+            "area": 206.52276611328125,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 14,
+            "obj_id": 3,
+            "weights": [
+              207.9436798095703,
+              -31.34051513671875,
+              29.919437408447266
+            ],
+            "area": 206.52264404296875,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 15,
+            "obj_id": 4,
+            "weights": [
+              207.28213500976562,
+              -34.1378173828125,
+              33.378517150878906
+            ],
+            "area": 206.5228271484375,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 16,
+            "obj_id": 1,
+            "weights": [
+              206.57643127441406,
+              -34.9512939453125,
+              34.89775848388672
+            ],
+            "area": 206.5228271484375,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 17,
+            "obj_id": 2,
+            "weights": [
+              205.8673095703125,
+              -33.7335205078125,
+              34.38887405395508
+            ],
+            "area": 206.522705078125,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 18,
+            "obj_id": 3,
+            "weights": [
+              205.19656372070312,
+              -30.5552978515625,
+              31.881427764892578
+            ],
+            "area": 206.522705078125,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 19,
+            "obj_id": 4,
+            "weights": [
+              204.60287475585938,
+              -25.60124969482422,
+              27.52115249633789
+            ],
+            "area": 206.52279663085938,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 20,
+            "obj_id": 1,
+            "weights": [
+              204.1207733154297,
+              -19.15936279296875,
+              21.561445236206055
+            ],
+            "area": 206.52285766601562,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 21,
+            "obj_id": 2,
+            "weights": [
+              203.77810668945312,
+              -11.60400390625,
+              14.348665237426758
+            ],
+            "area": 206.52276611328125,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 22,
+            "obj_id": 3,
+            "weights": [
+              203.5951385498047,
+              -3.374267578125,
+              6.301996231079102
+            ],
+            "area": 206.5228271484375,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 23,
+            "obj_id": 4,
+            "weights": [
+              203.5819091796875,
+              5.051513671875,
+              -2.1109275817871094
+            ],
+            "area": 206.5225830078125,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 24,
+            "obj_id": 1,
+            "weights": [
+              203.74014282226562,
+              13.18377685546875,
+              -10.401166915893555
+            ],
+            "area": 206.5228271484375,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 25,
+            "obj_id": 2,
+            "weights": [
+              204.05982971191406,
+              20.54986572265625,
+              -18.086931228637695
+            ],
+            "area": 206.52273559570312,
+            "inside": false,
+            "depth_before": Infinity
+          },
+          {
+            "triangle": 26,
+            "obj_id": 5,
+            "weights": [
+              -24.90306854248047,
+              -114.06884765625,
+              89.236328125
+            ],
+            "area": -49.7353515625,
+            "inside": false,
+            "depth_before": Infinity
+          }
+        ],
+        "final_srgb": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "final_linear": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "depth": Infinity,
+        "obj_id": 0,
+        "covered": false
+      }
+    }
+  }
+}

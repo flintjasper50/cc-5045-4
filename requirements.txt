@@ -1,0 +1,11 @@
+# 核心工具零第三方依赖，仅使用 Python 3.11+ 标准库（http.server, zlib, struct, math...）。
+#
+# 下列包仅在需要启用 *真实 GPU 路径* 时才需要；缺失时 GPU 设备会被诚实标记为
+# 不可用/未执行，CPU 参考路径与 f32 向量化路径照常运行，不影响任何功能：
+#
+#   cupy>=13.0      # CUDA GPU 数组后端（需 NVIDIA 驱动 + CUDA 运行时）
+#   numba>=0.59     # 备选：@cuda.jit 光栅化内核
+#   torch>=2.1      # 备选：torch.cuda 设备后端
+#
+# 安装任一并存在可用 GPU 后，backend/raster/devices.py 会自动探测到，
+# gpu_cuda 设备在界面变为可选，无需改动前端。

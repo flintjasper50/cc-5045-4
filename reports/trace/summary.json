@@ -1,0 +1,20 @@
+[
+  {
+    "scene": "sliver",
+    "executed": [
+      "cpu_ref",
+      "vector_f32"
+    ],
+    "skipped": [
+      "gpu_cuda"
+    ],
+    "gpu_can_execute": false,
+    "verdict": {
+      "class": "precision_only",
+      "title": "仅数值精度偏差",
+      "description": "两路径覆盖与对象标识完全一致，差异处于 f32/f64 舍入可解释范围内，属正常数值精度偏差。",
+      "reasons": [],
+      "pass": true
+    }
+  }
+]

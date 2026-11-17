@@ -1,0 +1,257 @@
+{
+  "scene": {
+    "key": "highlight",
+    "title": "强高光 (高光泽 Blinn-Phong)",
+    "description": "高光泽指数与强镜面项，微小法线/插值差异会移动尖峰位置。"
+  },
+  "config": {
+    "scene": "highlight",
+    "triangle_count": 4,
+    "width": 128,
+    "height": 128,
+    "camera": {
+      "fovy": 40.0,
+      "near": 0.1,
+      "far": 50.0,
+      "eye": [
+        1.2,
+        0.6,
+        8.5
+      ],
+      "target": [
+        0.0,
+        -0.8,
+        -1.0
+      ]
+    },
+    "light_dir": [
+      -0.84,
+      0.19,
+      0.5
+    ],
+    "exposure": 1.0,
+    "texture": "procedural_checker_8x8_linear_wrap",
+    "color_pipeline": "linear Blinn-Phong -> Reinhard -> sRGB OETF",
+    "coord_system": "right-handed, camera looks -Z, NDC z in [-1,1]",
+    "python": "3.11.2",
+    "platform": "Linux-7.0.14-linuxkit-aarch64-with-glibc2.36",
+    "fill_convention": "center-sample (x+0.5,y+0.5), top-left >=0",
+    "config_sha256": "29d68a9113f0efe728e81b66951df826d418f8b5c2363051f1680e420e74521a"
+  },
+  "gpu_status": {
+    "gpu_detected": false,
+    "gpu_hardware": null,
+    "cuda_module": null,
+    "gpu_can_execute": false,
+    "coverage": "本次覆盖：两条真实 CPU 计算实现(f64 参考 / f32 分块)实际执行并比较。GPU 路径因无可用设备或计算栈而未执行——未伪造任何 GPU 输出。接入 CUDA 后同一接口可启用第三路径。"
+  },
+  "devices": [
+    {
+      "id": "cpu_ref",
+      "label": "CPU 参考路径 (标量 f64，逐三角形)",
+      "kind": "cpu",
+      "precision": "float64",
+      "available": true,
+      "executed_note": "始终可运行：纯标准库标量光栅化，作为参考真值。"
+    },
+    {
+      "id": "vector_f32",
+      "label": "向量化计算路径 (分块逐像素，f32，GPU top-left 填充)",
+      "kind": "cpu-simd",
+      "precision": "float32 (binary32 舍入)",
+      "available": true,
+      "executed_note": "始终可运行：分块逐像素、f32 运算，模拟 GPU 单精度数据通路。"
+    },
+    {
+      "id": "gpu_cuda",
+      "label": "GPU 渲染路径 (CUDA/单精度)",
+      "kind": "gpu",
+      "precision": "float32",
+      "available": false,
+      "executed_note": "未检测到可用 GPU 设备/驱动；GPU 路径标记为未执行，不生成任何 GPU 图像。"
+    }
+  ],
+  "executed": [
+    "cpu_ref",
+    "vector_f32"
+  ],
+  "skipped": [
+    "gpu_cuda"
+  ],
+  "renders": {
+    "cpu_ref": {
+      "device": "cpu_ref",
+      "label": "CPU 参考路径 (标量 f64，逐三角形)",
+      "kind": "cpu",
+      "precision": "f64",
+      "elapsed_ms": 25.279,
+      "covered_count": 4324
+    },
+    "vector_f32": {
+      "device": "vector_f32",
+      "label": "向量化计算路径 (分块逐像素，f32，GPU top-left 填充)",
+      "kind": "cpu-simd",
+      "precision": "f32",
+      "elapsed_ms": 245.664,
+      "covered_count": 4324
+    }
+  },
+  "comparisons": [
+    {
+      "reference": "cpu_ref",
+      "test": "vector_f32",
+      "verdict": {
+        "class": "precision_only",
+        "title": "仅数值精度偏差",
+        "description": "两路径覆盖与对象标识完全一致，差异处于 f32/f64 舍入可解释范围内，属正常数值精度偏差。",
+        "reasons": [],
+        "pass": true
+      },
+      "stats": {
+        "edge": {
+          "srgb_abs": {
+            "sum": 0.00032076560157301426,
+            "max": 1.5744011434559724e-06,
+            "count": 897,
+            "mean": 3.575982180301162e-07,
+            "p99": 1.3483355236765249e-06,
+            "rmse": 5.000134463491434e-07
+          },
+          "srgb_rel": {
+            "sum": 0.00036160439428796986,
+            "max": 1.7940070590241957e-06,
+            "count": 897,
+            "mean": 4.031264150367557e-07,
+            "p99": 1.5371727558073177e-06,
+            "rmse": 5.624596169646697e-07
+          },
+          "linear_abs": {
+            "sum": 0.01525168513170383,
+            "max": 0.0001532679967120032,
+            "count": 897,
+            "mean": 1.7002993457863802e-05,
+            "p99": 0.00010147043009656187,
+            "rmse": 2.712390026324956e-05
+          },
+          "depth_abs": {
+            "sum": 1.3744081194255742e-05,
+            "max": 1.4954280136425524e-07,
+            "count": 299,
+            "mean": 4.5966826736641275e-08,
+            "p99": 1.3487910166531947e-07,
+            "rmse": 5.685011023734342e-08
+          }
+        },
+        "interior": {
+          "srgb_abs": {
+            "sum": 0.003919591571383774,
+            "max": 1.9179361507859483e-06,
+            "count": 12075,
+            "mean": 3.246038568433767e-07,
+            "p99": 1.2459381183438367e-06,
+            "rmse": 4.3557645314760686e-07
+          },
+          "srgb_rel": {
+            "sum": 0.0042376328699873555,
+            "max": 2.197454507518363e-06,
+            "count": 12075,
+            "mean": 3.5094268074429444e-07,
+            "p99": 1.3701873178394426e-06,
+            "rmse": 4.7198623880823936e-07
+          },
+          "linear_abs": {
+            "sum": 0.44779946493447964,
+            "max": 0.0002464219806483925,
+            "count": 12075,
+            "mean": 3.7084841816520056e-05,
+            "p99": 0.00016030828224256055,
+            "rmse": 5.19056887839955e-05
+          },
+          "depth_abs": {
+            "sum": 0.00019859917816733574,
+            "max": 1.933414263133315e-07,
+            "count": 4025,
+            "mean": 4.934141072480391e-08,
+            "p99": 1.4330692632569253e-07,
+            "rmse": 6.00887887793014e-08
+          }
+        },
+        "all_srgb_abs": {
+          "sum": 0.004240357172956788,
+          "max": 1.9179361507859483e-06,
+          "count": 12972,
+          "mean": 3.268853818190555e-07,
+          "p99": 1.2554175979895277e-06,
+          "rmse": 4.4033578186595866e-07
+        },
+        "all_srgb_rel": {
+          "sum": 0.004599237264275335,
+          "max": 2.197454507518363e-06,
+          "count": 12972,
+          "mean": 3.5455113045600795e-07,
+          "p99": 1.386873885859907e-06,
+          "rmse": 4.787929046025119e-07
+        },
+        "all_linear_abs": {
+          "sum": 0.46305115006618736,
+          "max": 0.0002464219806483925,
+          "count": 12972,
+          "mean": 3.569620336618774e-05,
+          "p99": 0.00015899078973014014,
+          "rmse": 5.058431291061079e-05
+        },
+        "all_depth_abs": {
+          "sum": 0.00021234325936159149,
+          "max": 1.933414263133315e-07,
+          "count": 4324,
+          "mean": 4.910806183200543e-08,
+          "p99": 1.4145140481147678e-07,
+          "rmse": 5.98704763053965e-08
+        },
+        "pixels_total": 16384,
+        "background_pixels": 12060,
+        "model_union_pixels": 4324,
+        "coverage_both": 4324,
+        "coverage_ref_only": 0,
+        "coverage_test_only": 0,
+        "edge_band_pixels": 299,
+        "interior_pixels": 4025,
+        "nonfinite": {
+          "count": 0,
+          "samples": []
+        }
+      },
+      "structural": {
+        "ref_only_count": 0,
+        "test_only_count": 0,
+        "ref_only_indices": [],
+        "test_only_indices": [],
+        "id_mismatch": [],
+        "depth_far_mismatch": [],
+        "total": 0
+      },
+      "nonfinite": {
+        "count": 0,
+        "samples": []
+      },
+      "tolerance": {
+        "srgb_abs_max": 0.00196078431372549,
+        "srgb_abs_p99": 0.000980392156862745,
+        "color_rel_eps": 0.0001,
+        "color_rel_max": 0.02,
+        "depth_rel_eps": 1e-07,
+        "depth_abs_hard": 0.0001,
+        "depth_abs_typical": 1e-06,
+        "coverage_tolerance": 0,
+        "provenance": {
+          "srgb_abs_max": "0.5/255：8 位 sRGB 半个量化步长，f32 正确舍入不应超过。",
+          "srgb_abs_p99": "0.25/255：99 分位收紧到四分之一步长，防止个别高光像素掩盖系统性偏差。",
+          "color_rel_eps": "1e-4：暗部相对误差分母下限，低于此值改用绝对误差判定。",
+          "depth_abs_hard": "1e-4：超过即判深度对应错误；典型 f32 深度舍入约 1e-6~1e-7。",
+          "coverage_tolerance": "覆盖/对象标识无容差，任何不一致都按结构错误上报。"
+        }
+      }
+    }
+  ],
+  "pixel_trace": null
+}

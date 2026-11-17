@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>科学模型多端出图验证工具</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header>
+  <h1>科学模型多端出图验证工具</h1>
+  <p class="sub">同一确定场景 · CPU 参考路径 vs 可用 GPU/向量化路径 · 浮点颜色 / 深度 / 对象标识对照</p>
+</header>
+
+<section class="panel" id="task-panel">
+  <h2>出图任务面板</h2>
+  <div class="controls">
+    <label>测试场景
+      <select id="scene-select"></select>
+    </label>
+    <label>分辨率
+      <select id="res-select">
+        <option value="64">64 × 64</option>
+        <option value="96">96 × 96</option>
+        <option value="128" selected>128 × 128</option>
+        <option value="192">192 × 192</option>
+        <option value="256">256 × 256</option>
+      </select>
+    </label>
+    <fieldset class="device-pick">
+      <legend>选择设备（真实计算，缺失设备不可勾选）</legend>
+      <div id="device-list"></div>
+    </fieldset>
+    <button id="render-btn" class="primary">渲染对照</button>
+    <span id="run-status" class="status"></span>
+  </div>
+  <div id="gpu-banner" class="banner hidden"></div>
+  <p class="scene-desc" id="scene-desc"></p>
+</section>
+
+<section class="panel hidden" id="result-panel">
+  <h2>结果区：各设备图像与误差</h2>
+
+  <div id="verdict-box" class="verdict"></div>
+
+  <h3>各设备出图（实时来自后端，无固定数据）</h3>
+  <div id="device-results" class="device-grid"></div>
+
+  <h3>差异与诊断通道（参考 f64 vs 向量化 f32）</h3>
+  <div id="diagnostic-grid" class="device-grid"></div>
+
+  <h3>差异统计（背景零值已排除，仅统计模型有效区域）</h3>
+  <div id="stats-table"></div>
+
+  <h3>容差来源</h3>
+  <div id="tolerance-box"></div>
+
+  <h3>像素检查（点击任一设备图像，查看该像素真实浮点输入与逐三角形判定）</h3>
+  <div id="inspector" class="inspector">
+    <p class="hint">在上方任意设备图像上点击一个像素。</p>
+    <div id="inspector-content"></div>
+  </div>
+
+  <h3>复现配置</h3>
+  <pre id="config-box" class="config"></pre>
+</section>
+
+<footer>
+  <span>所有图像与统计均由后端实时计算 · 未检测到可用 GPU 时不生成、不伪造任何 GPU 结果</span>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
