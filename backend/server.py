@@ -3,7 +3,8 @@
 Endpoints (all computation happens here, nothing is hardcoded):
   GET  /api/scenes              list deterministic scenes
   GET  /api/devices             honest device/GPU discovery + coverage note
-  POST /api/render              run selected devices on a scene, compare
+  GET  /api/profiles            capability/precision profile catalogue
+  POST /api/render              run selected devices/profiles on a scene, compare
   GET  /api/config/<scene>      reproducibility configuration + sha256
   GET  /                        frontend single-page panel
   GET  /static/<f>              frontend assets
@@ -12,7 +13,9 @@ import json
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from raster import available_scenes, render_job, reproducibility_config
+from raster import (available_scenes, profile_catalog, render_job,
+                    reproducibility_config)
+from raster.jsonio import dumps as json_dumps
 from raster.devices import discover_devices
 
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)),
@@ -30,7 +33,7 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "MultiRenderVerify/1.0"
 
     def _send_json(self, obj, status=200):
-        body = json.dumps(obj, default=str).encode("utf-8")
+        body = json_dumps(obj, default=str).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -60,6 +63,8 @@ class Handler(BaseHTTPRequestHandler):
         elif route == "/api/devices":
             devices, gpu = discover_devices()
             self._send_json({"devices": devices, "gpu_status": gpu})
+        elif route == "/api/profiles":
+            self._send_json(profile_catalog())
         elif route.startswith("/api/config/"):
             key = route.rsplit("/", 1)[-1]
             try:
@@ -91,8 +96,10 @@ class Handler(BaseHTTPRequestHandler):
         height = int(payload.get("height", width))
         trace = payload.get("trace_pixel")
         trace_pixel = tuple(trace) if trace else None
+        profiles = payload.get("profiles") or {}
         try:
-            result = render_job(scene, devices, width, height, trace_pixel)
+            result = render_job(scene, devices, width, height, trace_pixel,
+                                profiles=profiles)
         except KeyError:
             self._send_json({"error": "unknown scene: %s" % scene}, 404)
             return

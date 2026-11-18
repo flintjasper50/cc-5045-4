@@ -105,3 +105,32 @@ def coverage_diff_png(width, height, ref_cov, tst_cov):
         else:
             rows.append((15, 15, 18))
     return encode_png(width, height, rows)
+
+
+_STAGE_COLORS = {
+    "non_finite": (255, 0, 255),
+    "coverage": (255, 60, 60),
+    "object_id": (230, 130, 20),
+    "depth": (220, 200, 40),
+    "texture_sampling": (60, 200, 120),
+    "shading": (60, 140, 240),
+    "blend_write": (240, 160, 60),
+    "color_mapping": (150, 90, 230),
+}
+
+
+def stage_png(width, height, stage_index, covered):
+    """Colour each pixel by the first pipeline stage where it diverged.
+
+    ``stage_index`` is a full-length list of stage names or ``None`` (agreed
+    model pixel).  Background is dark; agreed model pixels are neutral grey.
+    This is the per-pixel attribution view.
+    """
+    rows = []
+    for i in range(width * height):
+        stage = stage_index[i]
+        if stage is None:
+            rows.append((60, 60, 66) if covered[i] else (18, 18, 20))
+        else:
+            rows.append(_STAGE_COLORS.get(stage, (255, 255, 255)))
+    return encode_png(width, height, rows)

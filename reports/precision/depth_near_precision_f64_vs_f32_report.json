@@ -1,0 +1,2565 @@
+{
+  "scene": {
+    "key": "depth_near",
+    "title": "深度接近 / 近重合表面",
+    "description": "远距双平面深度差约 9e-4，检验 f32/f64 深度缓冲精度与覆盖判定。"
+  },
+  "config": {
+    "scene": "depth_near",
+    "triangle_count": 16,
+    "width": 128,
+    "height": 128,
+    "camera": {
+      "fovy": 45.0,
+      "near": 0.1,
+      "far": 60.0,
+      "eye": [
+        0.0,
+        0.0,
+        3.0
+      ],
+      "target": [
+        0.0,
+        0.0,
+        -13.5
+      ]
+    },
+    "light_dir": [
+      0.4,
+      0.8,
+      0.9
+    ],
+    "exposure": 1.0,
+    "texture": "procedural_checker_8x8_linear_wrap",
+    "color_pipeline": "linear Blinn-Phong -> Reinhard -> sRGB OETF",
+    "coord_system": "right-handed, camera looks -Z, NDC z in [-1,1]",
+    "python": "3.11.2",
+    "platform": "Linux-7.0.14-linuxkit-aarch64-with-glibc2.36",
+    "fill_convention": "center-sample (x+0.5,y+0.5), top-left >=0",
+    "rules_version": "acceptance-2026.11-v2",
+    "config_sha256": "5bc7e1d3e88ce9efe31189ef9d6e191fa4304b990d99248a0e071aedea7c374d"
+  },
+  "rules_version": "acceptance-2026.11-v2",
+  "rules_changelog": {
+    "acceptance-2026.11-v1": "初版逐像素比较：仅统计模型有效区域；覆盖/对象标识不一致记为结构差异；sRGB 绝对误差 0.5/255、深度硬限 1e-4。",
+    "acceptance-2026.11-v2": "按操作与有效像素制定验收：拆出 coverage/object_id/depth/final_color_inherited/final_color_primary/linear_hdr/finite 七条规则；显式通道交换探测与深度约定探测；非有限值独立失败类；允许偏差按像素类别(内部/边缘)分别给出。"
+  },
+  "gpu_status": {
+    "gpu_detected": false,
+    "gpu_hardware": null,
+    "cuda_module": null,
+    "gpu_can_execute": false,
+    "coverage": "本次覆盖：两条真实 CPU 计算实现(f64 参考 / f32 分块)实际执行并比较。GPU 路径因无可用设备或计算栈而未执行——未伪造任何 GPU 输出。GPU 的精度/格式组合尚未在本机验证，界面中会单独标出。",
+    "cross_device_cases": [
+      {
+        "id": "fill_convention_same_profile",
+        "scene": "depth_near",
+        "width": 128,
+        "devices": [
+          "cpu_ref",
+          "vector_f32"
+        ],
+        "profiles": {
+          "cpu_ref": "strict_f32",
+          "vector_f32": "strict_f32"
+        },
+        "expects": "两套实现即使同为 strict_f32，在近重合/剪影像素上仍会不同；应判为 coverage_struct/object_id，而非 precision_exceeded。"
+      }
+    ]
+  },
+  "devices": [
+    {
+      "id": "cpu_ref",
+      "label": "CPU 参考路径 (标量 f64，逐三角形)",
+      "kind": "cpu",
+      "precision": "float64",
+      "available": true,
+      "capabilities": {
+        "precision": [
+          "f64",
+          "f32"
+        ],
+        "fast_math": [
+          false,
+          true
+        ],
+        "texture_format": [
+          "float32_bilinear",
+          "rgba8_linear"
+        ],
+        "blend_capability": [
+          "float_blend",
+          "fixed8_blend"
+        ],
+        "depth_convention": [
+          "ndc_minus1_1",
+          "ndc_0_1"
+        ],
+        "depth_test": [
+          "less",
+          "less_equal"
+        ]
+      },
+      "executed_note": "始终可运行：纯标准库标量光栅化，作为参考真值。"
+    },
+    {
+      "id": "vector_f32",
+      "label": "向量化计算路径 (分块逐像素，f32，GPU top-left 填充)",
+      "kind": "cpu-simd",
+      "precision": "float32 (binary32 舍入)",
+      "available": true,
+      "capabilities": {
+        "precision": [
+          "f32"
+        ],
+        "fast_math": [
+          false,
+          true
+        ],
+        "texture_format": [
+          "float32_bilinear",
+          "rgba8_linear"
+        ],
+        "blend_capability": [
+          "float_blend",
+          "fixed8_blend"
+        ],
+        "depth_convention": [
+          "ndc_minus1_1",
+          "ndc_0_1"
+        ],
+        "depth_test": [
+          "less",
+          "less_equal"
+        ]
+      },
+      "executed_note": "始终可运行：分块逐像素、f32 运算，模拟 GPU 单精度数据通路。"
+    },
+    {
+      "id": "gpu_cuda",
+      "label": "GPU 渲染路径 (CUDA/单精度)",
+      "kind": "gpu",
+      "precision": "float32",
+      "available": false,
+      "capabilities": {
+        "precision": [
+          "f32"
+        ],
+        "fast_math": [
+          false,
+          true
+        ],
+        "texture_format": [
+          "float32_bilinear"
+        ],
+        "blend_capability": [
+          "float_blend"
+        ],
+        "depth_convention": [
+          "ndc_minus1_1"
+        ],
+        "depth_test": [
+          "less"
+        ]
+      },
+      "executed_note": "未检测到可用 GPU 设备/驱动；GPU 路径标记为未执行，不生成任何 GPU 图像。"
+    }
+  ],
+  "profiles": {
+    "cpu_ref": {
+      "id": "reference_f64",
+      "label": "参考 f64 · 严格 IEEE · 浮点纹理 · 浮点写回",
+      "diagnostic_only": false,
+      "sources": {
+        "precision": "运算精度：f64=IEEE 双精度参考；f32=每步按 binary32 舍入（GPU 单精度形态）。",
+        "fast_math": "快速数学：启用后用指数近似倒数 + 牛顿迭代、重结合点积，属显式声明的近似通路。",
+        "texture_format": "纹理存储：float32_bilinear=浮点双线性；rgba8_linear=采样后量化到 8 位线性格点(1/255)。",
+        "blend_capability": "混合/写回能力：float_blend=线性浮点写回；fixed8_blend=写回时量化到 8 位线性格点(1/255)。",
+        "depth_convention": "深度约定：ndc_minus1_1=OpenGL 风格 [-1,1(NDC)]；ndc_0_1=D3D/Vulkan 风格 [0,1]（诊断用，刻意引入约定差异）。",
+        "depth_test": "深度测试：less=严格小于；less_equal=近重合表面后写覆盖。"
+      },
+      "precision": "f64",
+      "fast_math": false,
+      "texture_format": "float32_bilinear",
+      "blend_capability": "float_blend",
+      "depth_convention": "ndc_minus1_1",
+      "depth_test": "less",
+      "sha256": "09ba0d3d931c5be96296013d8c957afb899252be284dbcdc0b771e6e0e01988c"
+    },
+    "vector_f32": {
+      "id": "strict_f32",
+      "label": "f32 严格 IEEE · 浮点纹理 · 浮点写回",
+      "diagnostic_only": false,
+      "sources": {
+        "precision": "运算精度：f64=IEEE 双精度参考；f32=每步按 binary32 舍入（GPU 单精度形态）。",
+        "fast_math": "快速数学：启用后用指数近似倒数 + 牛顿迭代、重结合点积，属显式声明的近似通路。",
+        "texture_format": "纹理存储：float32_bilinear=浮点双线性；rgba8_linear=采样后量化到 8 位线性格点(1/255)。",
+        "blend_capability": "混合/写回能力：float_blend=线性浮点写回；fixed8_blend=写回时量化到 8 位线性格点(1/255)。",
+        "depth_convention": "深度约定：ndc_minus1_1=OpenGL 风格 [-1,1(NDC)]；ndc_0_1=D3D/Vulkan 风格 [0,1]（诊断用，刻意引入约定差异）。",
+        "depth_test": "深度测试：less=严格小于；less_equal=近重合表面后写覆盖。"
+      },
+      "precision": "f32",
+      "fast_math": false,
+      "texture_format": "float32_bilinear",
+      "blend_capability": "float_blend",
+      "depth_convention": "ndc_minus1_1",
+      "depth_test": "less",
+      "sha256": "229f81aa85742908c64b75c99fd7118f4ec8db317205681191e3735861312dcf"
+    }
+  },
+  "executed": [
+    "cpu_ref",
+    "vector_f32"
+  ],
+  "skipped": [],
+  "unsupported": [],
+  "chain": [
+    "cpu_ref",
+    "vector_f32"
+  ],
+  "renders": {
+    "cpu_ref": {
+      "device": "cpu_ref",
+      "label": "CPU 参考路径 (标量 f64，逐三角形)",
+      "kind": "cpu",
+      "precision": "f64",
+      "profile": {
+        "id": "reference_f64",
+        "label": "参考 f64 · 严格 IEEE · 浮点纹理 · 浮点写回",
+        "diagnostic_only": false,
+        "sources": {
+          "precision": "运算精度：f64=IEEE 双精度参考；f32=每步按 binary32 舍入（GPU 单精度形态）。",
+          "fast_math": "快速数学：启用后用指数近似倒数 + 牛顿迭代、重结合点积，属显式声明的近似通路。",
+          "texture_format": "纹理存储：float32_bilinear=浮点双线性；rgba8_linear=采样后量化到 8 位线性格点(1/255)。",
+          "blend_capability": "混合/写回能力：float_blend=线性浮点写回；fixed8_blend=写回时量化到 8 位线性格点(1/255)。",
+          "depth_convention": "深度约定：ndc_minus1_1=OpenGL 风格 [-1,1(NDC)]；ndc_0_1=D3D/Vulkan 风格 [0,1]（诊断用，刻意引入约定差异）。",
+          "depth_test": "深度测试：less=严格小于；less_equal=近重合表面后写覆盖。"
+        },
+        "precision": "f64",
+        "fast_math": false,
+        "texture_format": "float32_bilinear",
+        "blend_capability": "float_blend",
+        "depth_convention": "ndc_minus1_1",
+        "depth_test": "less",
+        "sha256": "09ba0d3d931c5be96296013d8c957afb899252be284dbcdc0b771e6e0e01988c"
+      },
+      "elapsed_ms": 19.935,
+      "covered_count": 1393
+    },
+    "vector_f32": {
+      "device": "vector_f32",
+      "label": "向量化计算路径 (分块逐像素，f32，GPU top-left 填充)",
+      "kind": "cpu-simd",
+      "precision": "f32",
+      "profile": {
+        "id": "strict_f32",
+        "label": "f32 严格 IEEE · 浮点纹理 · 浮点写回",
+        "diagnostic_only": false,
+        "sources": {
+          "precision": "运算精度：f64=IEEE 双精度参考；f32=每步按 binary32 舍入（GPU 单精度形态）。",
+          "fast_math": "快速数学：启用后用指数近似倒数 + 牛顿迭代、重结合点积，属显式声明的近似通路。",
+          "texture_format": "纹理存储：float32_bilinear=浮点双线性；rgba8_linear=采样后量化到 8 位线性格点(1/255)。",
+          "blend_capability": "混合/写回能力：float_blend=线性浮点写回；fixed8_blend=写回时量化到 8 位线性格点(1/255)。",
+          "depth_convention": "深度约定：ndc_minus1_1=OpenGL 风格 [-1,1(NDC)]；ndc_0_1=D3D/Vulkan 风格 [0,1]（诊断用，刻意引入约定差异）。",
+          "depth_test": "深度测试：less=严格小于；less_equal=近重合表面后写覆盖。"
+        },
+        "precision": "f32",
+        "fast_math": false,
+        "texture_format": "float32_bilinear",
+        "blend_capability": "float_blend",
+        "depth_convention": "ndc_minus1_1",
+        "depth_test": "less",
+        "sha256": "229f81aa85742908c64b75c99fd7118f4ec8db317205681191e3735861312dcf"
+      },
+      "elapsed_ms": 152.58,
+      "covered_count": 1376
+    }
+  },
+  "comparisons": [
+    {
+      "reference": "cpu_ref",
+      "test": "vector_f32",
+      "chain": [
+        "cpu_ref",
+        "vector_f32"
+      ],
+      "rules_version": "acceptance-2026.11-v2",
+      "verdict": {
+        "class": "fail",
+        "title": "覆盖结构错误",
+        "description": "coverage_struct（coverage）：17 个像素超出允许偏差。；object_id（object_id）：7 个像素超出允许偏差。",
+        "reasons": [
+          "coverage_struct（coverage）：17 个像素超出允许偏差。",
+          "object_id（object_id）：7 个像素超出允许偏差。"
+        ],
+        "pass": false,
+        "primary_class": "coverage_struct"
+      },
+      "acceptance": {
+        "rules_version": "acceptance-2026.11-v2",
+        "rules_changelog": {
+          "acceptance-2026.11-v1": "初版逐像素比较：仅统计模型有效区域；覆盖/对象标识不一致记为结构差异；sRGB 绝对误差 0.5/255、深度硬限 1e-4。",
+          "acceptance-2026.11-v2": "按操作与有效像素制定验收：拆出 coverage/object_id/depth/final_color_inherited/final_color_primary/linear_hdr/finite 七条规则；显式通道交换探测与深度约定探测；非有限值独立失败类；允许偏差按像素类别(内部/边缘)分别给出。"
+        },
+        "rules": {
+          "coverage": {
+            "effective_pixels": "模型并集 (ref_cov 或 test_cov)",
+            "allowed_disagreement": 0,
+            "failure_class": "coverage_struct",
+            "provenance": "覆盖归属无数值容差；缺失/新增一个模型像素即结构差异，不得被颜色阈值吸收。"
+          },
+          "object_id": {
+            "effective_pixels": "两路径共同覆盖像素",
+            "allowed_mismatch": 0,
+            "failure_class": "object_id",
+            "provenance": "对象标识不一致代表几何归属错误，与浮点误差无关。"
+          },
+          "depth": {
+            "effective_pixels": "共同覆盖且深度有限",
+            "allowed_abs_internal": 0.0001,
+            "allowed_abs_edge": 0.0001,
+            "failure_class": "depth_convention",
+            "provenance": "NDC 深度差超过 1e-4 视为深度约定/对应错误；f32 深度舍入典型 1e-6~1e-7，远低于该硬限。"
+          },
+          "final_color_inherited": {
+            "effective_pixels": "共同覆盖、有限、且在上一设备中已被同一对象覆盖",
+            "allowed_abs_internal": 0.00196078431372549,
+            "allowed_abs_edge": 0.00392156862745098,
+            "allowed_rel": 0.02,
+            "failure_class": "precision_exceeded",
+            "provenance": "输入颜色已由上游设备确定，只允许采样/写回引入的偏差；内部=半个量化步长，边缘带放宽到一步长。"
+          },
+          "final_color_primary": {
+            "effective_pixels": "上一设备未覆盖但本设备覆盖(差异被本次引入)的共同覆盖像素",
+            "allowed_abs_internal": 0.00196078431372549,
+            "allowed_abs_edge": 0.00392156862745098,
+            "allowed_rel": 0.02,
+            "failure_class": "precision_exceeded",
+            "provenance": "差异由本次设备的采样/颜色路径首次引入，按同口径判定。"
+          },
+          "blend_write_quantized": {
+            "effective_pixels": "共同覆盖、对象一致、被测设备声明 fixed8_blend",
+            "allowed_abs_internal": 0.01568627450980392,
+            "allowed_abs_edge": 0.01568627450980392,
+            "allowed_rel": 0.05,
+            "failure_class": "blend_quantization_exceeded",
+            "provenance": "8 位线性写回在强高光下会被映射放大；允许最多约 4 个 sRGB 量化步长，超过则说明写回量化已产生可见偏差。"
+          },
+          "linear_hdr": {
+            "effective_pixels": "共同覆盖、对象标识一致且有限",
+            "allowed_rel": 0.02,
+            "failure_class": "precision_exceeded",
+            "provenance": "线性 HDR 相对误差用于定位色调映射之前的颜色路径偏差；Reinhard 会压缩差异，故需在映射前检查。"
+          },
+          "finite": {
+            "effective_pixels": "反照率/颜色/深度的所有输出",
+            "allowed_nonfinite": 0,
+            "failure_class": "non_finite",
+            "provenance": "NaN/Inf 独立失败类；任何全局阈值都不得将其吞掉。"
+          }
+        },
+        "channel_swap_probe": {
+          "triggered": false,
+          "identity_mean_abs": 0.0008885323936169414,
+          "best_permutation": [
+            1,
+            0,
+            2
+          ],
+          "best_permutation_mean_abs": 0.10860928015530477,
+          "reason": "原始误差低于嫌疑阈值，不构成通道交换。"
+        },
+        "depth_convention_probe": {
+          "triggered": false,
+          "mean_abs": 4.5713151207131636e-08,
+          "sign_consistency": 0.5741279069767442,
+          "reason": "深度差不足以判定约定不一致。"
+        },
+        "failures": [
+          {
+            "class": "coverage_struct",
+            "operation": "coverage",
+            "count": 17,
+            "effective_pixels": 1393,
+            "samples": [
+              {
+                "index": 9164,
+                "side": "ref_only"
+              },
+              {
+                "index": 9165,
+                "side": "ref_only"
+              },
+              {
+                "index": 9166,
+                "side": "ref_only"
+              },
+              {
+                "index": 9167,
+                "side": "ref_only"
+              },
+              {
+                "index": 9168,
+                "side": "ref_only"
+              },
+              {
+                "index": 9169,
+                "side": "ref_only"
+              },
+              {
+                "index": 9170,
+                "side": "ref_only"
+              },
+              {
+                "index": 9171,
+                "side": "ref_only"
+              },
+              {
+                "index": 9172,
+                "side": "ref_only"
+              },
+              {
+                "index": 9173,
+                "side": "ref_only"
+              }
+            ]
+          },
+          {
+            "class": "object_id",
+            "operation": "object_id",
+            "count": 7,
+            "effective_pixels": 1376,
+            "samples": [
+              {
+                "index": 3979,
+                "ref_id": 2,
+                "test_id": 1
+              },
+              {
+                "index": 3980,
+                "ref_id": 2,
+                "test_id": 1
+              },
+              {
+                "index": 3981,
+                "ref_id": 2,
+                "test_id": 1
+              },
+              {
+                "index": 3982,
+                "ref_id": 2,
+                "test_id": 1
+              },
+              {
+                "index": 3983,
+                "ref_id": 2,
+                "test_id": 1
+              },
+              {
+                "index": 3984,
+                "ref_id": 2,
+                "test_id": 1
+              },
+              {
+                "index": 3985,
+                "ref_id": 2,
+                "test_id": 1
+              }
+            ]
+          }
+        ],
+        "pass": false,
+        "verdict": {
+          "class": "fail",
+          "title": "覆盖结构错误",
+          "description": "coverage_struct（coverage）：17 个像素超出允许偏差。；object_id（object_id）：7 个像素超出允许偏差。",
+          "reasons": [
+            "coverage_struct（coverage）：17 个像素超出允许偏差。",
+            "object_id（object_id）：7 个像素超出允许偏差。"
+          ],
+          "pass": false,
+          "primary_class": "coverage_struct"
+        },
+        "decision_basis": "规则版本 acceptance-2026.11-v2；按操作/有效像素判定，未使用“全局宽松阈值直到全绿”策略。"
+      },
+      "attribution": {
+        "stages": {
+          "non_finite": {
+            "count": 0,
+            "edge_count": 0,
+            "interior_count": 0,
+            "provenance": "输出含 NaN/Inf，直接失败；任何阈值都不适用。",
+            "samples": []
+          },
+          "coverage": {
+            "count": 17,
+            "edge_count": 17,
+            "interior_count": 0,
+            "provenance": "覆盖状态不同：像素归属本身不一致，先于任何数值比较。",
+            "samples": [
+              {
+                "index": 9164,
+                "x": 76,
+                "y": 71,
+                "stage": "coverage",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 3,
+                  "depth": 0.983890222968709,
+                  "albedo": [
+                    0.9,
+                    0.6,
+                    0.2
+                  ],
+                  "linear": [
+                    0.6173235686396149,
+                    0.4115490457668383,
+                    0.137183015269803
+                  ],
+                  "srgb": [
+                    0.6512645951904226,
+                    0.5762791863071196,
+                    0.3820504964607457
+                  ]
+                },
+                "test": {
+                  "covered": false,
+                  "obj_id": 0,
+                  "depth": "inf",
+                  "albedo": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "linear": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "srgb": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ]
+                }
+              },
+              {
+                "index": 9165,
+                "x": 77,
+                "y": 71,
+                "stage": "coverage",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 3,
+                  "depth": 0.9838902229687089,
+                  "albedo": [
+                    0.9,
+                    0.6,
+                    0.2
+                  ],
+                  "linear": [
+                    0.6173235686399585,
+                    0.411549045767182,
+                    0.13718301527014667
+                  ],
+                  "srgb": [
+                    0.6512645951905238,
+                    0.5762791863072751,
+                    0.3820504964611468
+                  ]
+                },
+                "test": {
+                  "covered": false,
+                  "obj_id": 0,
+                  "depth": "inf",
+                  "albedo": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "linear": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "srgb": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ]
+                }
+              },
+              {
+                "index": 9166,
+                "x": 78,
+                "y": 71,
+                "stage": "coverage",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 3,
+                  "depth": 0.983890222968709,
+                  "albedo": [
+                    0.9,
+                    0.6,
+                    0.2
+                  ],
+                  "linear": [
+                    0.6173235686403109,
+                    0.4115490457675343,
+                    0.13718301527049898
+                  ],
+                  "srgb": [
+                    0.6512645951906277,
+                    0.5762791863074347,
+                    0.3820504964615581
+                  ]
+                },
+                "test": {
+                  "covered": false,
+                  "obj_id": 0,
+                  "depth": "inf",
+                  "albedo": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "linear": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "srgb": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ]
+                }
+              },
+              {
+                "index": 9167,
+                "x": 79,
+                "y": 71,
+                "stage": "coverage",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 3,
+                  "depth": 0.983890222968709,
+                  "albedo": [
+                    0.9,
+                    0.6,
+                    0.2
+                  ],
+                  "linear": [
+                    0.6173235686406721,
+                    0.41154904576789547,
+                    0.13718301527086013
+                  ],
+                  "srgb": [
+                    0.6512645951907342,
+                    0.5762791863075983,
+                    0.3820504964619797
+                  ]
+                },
+                "test": {
+                  "covered": false,
+                  "obj_id": 0,
+                  "depth": "inf",
+                  "albedo": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "linear": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "srgb": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ]
+                }
+              },
+              {
+                "index": 9168,
+                "x": 80,
+                "y": 71,
+                "stage": "coverage",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 3,
+                  "depth": 0.983890222968709,
+                  "albedo": [
+                    0.9,
+                    0.6,
+                    0.2
+                  ],
+                  "linear": [
+                    0.6173235686410422,
+                    0.4115490457682657,
+                    0.13718301527123036
+                  ],
+                  "srgb": [
+                    0.6512645951908433,
+                    0.576279186307766,
+                    0.3820504964624119
+                  ]
+                },
+                "test": {
+                  "covered": false,
+                  "obj_id": 0,
+                  "depth": "inf",
+                  "albedo": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "linear": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "srgb": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ]
+                }
+              },
+              {
+                "index": 9169,
+                "x": 81,
+                "y": 71,
+                "stage": "coverage",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 3,
+                  "depth": 0.9838902229687089,
+                  "albedo": [
+                    0.9,
+                    0.6,
+                    0.2
+                  ],
+                  "linear": [
+                    0.6173235686414217,
+                    0.41154904576864515,
+                    0.13718301527160984
+                  ],
+                  "srgb": [
+                    0.651264595190955,
+                    0.5762791863079376,
+                    0.38205049646285477
+                  ]
+                },
+                "test": {
+                  "covered": false,
+                  "obj_id": 0,
+                  "depth": "inf",
+                  "albedo": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "linear": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "srgb": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ]
+                }
+              },
+              {
+                "index": 9170,
+                "x": 82,
+                "y": 71,
+                "stage": "coverage",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 3,
+                  "depth": 0.983890222968709,
+                  "albedo": [
+                    0.9,
+                    0.6,
+                    0.2
+                  ],
+                  "linear": [
+                    0.6173235686418107,
+                    0.4115490457690341,
+                    0.1371830152719988
+                  ],
+                  "srgb": [
+                    0.6512645951910697,
+                    0.5762791863081138,
+                    0.38205049646330885
+                  ]
+                },
+                "test": {
+                  "covered": false,
+                  "obj_id": 0,
+                  "depth": "inf",
+                  "albedo": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "linear": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "srgb": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ]
+                }
+              },
+              {
+                "index": 9171,
+                "x": 83,
+                "y": 71,
+                "stage": "coverage",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 3,
+                  "depth": 0.983890222968709,
+                  "albedo": [
+                    0.9,
+                    0.6,
+                    0.2
+                  ],
+                  "linear": [
+                    0.6173235686422094,
+                    0.4115490457694328,
+                    0.1371830152723975
+                  ],
+                  "srgb": [
+                    0.6512645951911873,
+                    0.5762791863082943,
+                    0.3820504964637743
+                  ]
+                },
+                "test": {
+                  "covered": false,
+                  "obj_id": 0,
+                  "depth": "inf",
+                  "albedo": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "linear": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "srgb": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ]
+                }
+              },
+              {
+                "index": 9172,
+                "x": 84,
+                "y": 71,
+                "stage": "coverage",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 3,
+                  "depth": 0.983890222968709,
+                  "albedo": [
+                    0.9,
+                    0.6,
+                    0.2
+                  ],
+                  "linear": [
+                    0.6173235686426181,
+                    0.41154904576984147,
+                    0.13718301527280616
+                  ],
+                  "srgb": [
+                    0.6512645951913076,
+                    0.5762791863084794,
+                    0.3820504964642513
+                  ]
+                },
+                "test": {
+                  "covered": false,
+                  "obj_id": 0,
+                  "depth": "inf",
+                  "albedo": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "linear": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "srgb": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ]
+                }
+              },
+              {
+                "index": 9173,
+                "x": 85,
+                "y": 71,
+                "stage": "coverage",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 3,
+                  "depth": 0.9838902229687091,
+                  "albedo": [
+                    0.9,
+                    0.6,
+                    0.2
+                  ],
+                  "linear": [
+                    0.6173235686430368,
+                    0.4115490457702603,
+                    0.13718301527322496
+                  ],
+                  "srgb": [
+                    0.6512645951914312,
+                    0.576279186308669,
+                    0.38205049646474015
+                  ]
+                },
+                "test": {
+                  "covered": false,
+                  "obj_id": 0,
+                  "depth": "inf",
+                  "albedo": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "linear": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "srgb": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ]
+                }
+              },
+              {
+                "index": 9174,
+                "x": 86,
+                "y": 71,
+                "stage": "coverage",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 3,
+                  "depth": 0.9838902229687092,
+                  "albedo": [
+                    0.9,
+                    0.6,
+                    0.2
+                  ],
+                  "linear": [
+                    0.6173235686434662,
+                    0.4115490457706895,
+                    0.1371830152736542
+                  ],
+                  "srgb": [
+                    0.6512645951915577,
+                    0.5762791863088634,
+                    0.38205049646524125
+                  ]
+                },
+                "test": {
+                  "covered": false,
+                  "obj_id": 0,
+                  "depth": "inf",
+                  "albedo": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "linear": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "srgb": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ]
+                }
+              },
+              {
+                "index": 9175,
+                "x": 87,
+                "y": 71,
+                "stage": "coverage",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 3,
+                  "depth": 0.9838902229687091,
+                  "albedo": [
+                    0.9,
+                    0.6,
+                    0.2
+                  ],
+                  "linear": [
+                    0.617323568643906,
+                    0.41154904577112944,
+                    0.1371830152740941
+                  ],
+                  "srgb": [
+                    0.6512645951916873,
+                    0.5762791863090626,
+                    0.38205049646575473
+                  ]
+                },
+                "test": {
+                  "covered": false,
+                  "obj_id": 0,
+                  "depth": "inf",
+                  "albedo": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "linear": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "srgb": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ]
+                }
+              },
+              {
+                "index": 9176,
+                "x": 88,
+                "y": 71,
+                "stage": "coverage",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 3,
+                  "depth": 0.9838902229687091,
+                  "albedo": [
+                    0.9,
+                    0.6,
+                    0.2
+                  ],
+                  "linear": [
+                    0.6173235686443568,
+                    0.41154904577158025,
+                    0.1371830152745449
+                  ],
+                  "srgb": [
+                    0.6512645951918202,
+                    0.5762791863092668,
+                    0.382050496466281
+                  ]
+                },
+                "test": {
+                  "covered": false,
+                  "obj_id": 0,
+                  "depth": "inf",
+                  "albedo": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "linear": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "srgb": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ]
+                }
+              },
+              {
+                "index": 9177,
+                "x": 89,
+                "y": 71,
+                "stage": "coverage",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 3,
+                  "depth": 0.983890222968709,
+                  "albedo": [
+                    0.9,
+                    0.6,
+                    0.2
+                  ],
+                  "linear": [
+                    0.6173235686448187,
+                    0.4115490457720422,
+                    0.1371830152750069
+                  ],
+                  "srgb": [
+                    0.6512645951919565,
+                    0.5762791863094759,
+                    0.3820504964668203
+                  ]
+                },
+                "test": {
+                  "covered": false,
+                  "obj_id": 0,
+                  "depth": "inf",
+                  "albedo": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "linear": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "srgb": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ]
+                }
+              },
+              {
+                "index": 9178,
+                "x": 90,
+                "y": 71,
+                "stage": "coverage",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 3,
+                  "depth": 0.983890222968709,
+                  "albedo": [
+                    0.9,
+                    0.6,
+                    0.2
+                  ],
+                  "linear": [
+                    0.6173235686452923,
+                    0.4115490457725156,
+                    0.1371830152754803
+                  ],
+                  "srgb": [
+                    0.6512645951920959,
+                    0.5762791863096902,
+                    0.3820504964673729
+                  ]
+                },
+                "test": {
+                  "covered": false,
+                  "obj_id": 0,
+                  "depth": "inf",
+                  "albedo": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "linear": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "srgb": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ]
+                }
+              },
+              {
+                "index": 9179,
+                "x": 91,
+                "y": 71,
+                "stage": "coverage",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 3,
+                  "depth": 0.9838902229687091,
+                  "albedo": [
+                    0.9,
+                    0.6,
+                    0.2
+                  ],
+                  "linear": [
+                    0.6173235686457773,
+                    0.4115490457730007,
+                    0.13718301527596538
+                  ],
+                  "srgb": [
+                    0.6512645951922389,
+                    0.5762791863099099,
+                    0.3820504964679391
+                  ]
+                },
+                "test": {
+                  "covered": false,
+                  "obj_id": 0,
+                  "depth": "inf",
+                  "albedo": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "linear": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "srgb": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ]
+                }
+              },
+              {
+                "index": 9180,
+                "x": 92,
+                "y": 71,
+                "stage": "coverage",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 3,
+                  "depth": 0.983890222968709,
+                  "albedo": [
+                    0.9,
+                    0.6,
+                    0.2
+                  ],
+                  "linear": [
+                    0.6173235686462744,
+                    0.41154904577349777,
+                    0.13718301527646243
+                  ],
+                  "srgb": [
+                    0.6512645951923854,
+                    0.5762791863101349,
+                    0.38205049646851935
+                  ]
+                },
+                "test": {
+                  "covered": false,
+                  "obj_id": 0,
+                  "depth": "inf",
+                  "albedo": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "linear": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "srgb": [
+                    0.0,
+                    0.0,
+                    0.0
+                  ]
+                }
+              }
+            ]
+          },
+          "object_id": {
+            "count": 7,
+            "edge_count": 0,
+            "interior_count": 7,
+            "provenance": "同一像素被不同对象占据：几何/深度测试差异。",
+            "samples": [
+              {
+                "index": 3979,
+                "x": 11,
+                "y": 31,
+                "stage": "object_id",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 2,
+                  "depth": 0.9905106894503041,
+                  "albedo": [
+                    0.25,
+                    0.55,
+                    0.3
+                  ],
+                  "linear": [
+                    0.21435002085430357,
+                    0.4270447737218731,
+                    0.24979914633223183
+                  ],
+                  "srgb": [
+                    0.4571658828777015,
+                    0.5831665666621394,
+                    0.484384665597456
+                  ]
+                },
+                "test": {
+                  "covered": true,
+                  "obj_id": 1,
+                  "depth": 0.990511417388916,
+                  "albedo": [
+                    0.20000000298023224,
+                    0.44999998807907104,
+                    0.949999988079071
+                  ],
+                  "linear": [
+                    0.14291971921920776,
+                    0.3201653063297272,
+                    0.6746565699577332
+                  ],
+                  "srgb": [
+                    0.38864368587705583,
+                    0.5296508791342813,
+                    0.6673281521374403
+                  ]
+                }
+              },
+              {
+                "index": 3980,
+                "x": 12,
+                "y": 31,
+                "stage": "object_id",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 2,
+                  "depth": 0.9905345258812173,
+                  "albedo": [
+                    0.25,
+                    0.55,
+                    0.3
+                  ],
+                  "linear": [
+                    0.21448562376993358,
+                    0.4271803766375031,
+                    0.24993474924786183
+                  ],
+                  "srgb": [
+                    0.45727702701365863,
+                    0.5832257243751504,
+                    0.48448225959018026
+                  ]
+                },
+                "test": {
+                  "covered": true,
+                  "obj_id": 1,
+                  "depth": 0.9905351400375366,
+                  "albedo": [
+                    0.20558033883571625,
+                    0.44851189851760864,
+                    0.9444196820259094
+                  ],
+                  "linear": [
+                    0.14689257740974426,
+                    0.31912681460380554,
+                    0.6707167625427246
+                  ],
+                  "srgb": [
+                    0.39309275467835303,
+                    0.5290514479271631,
+                    0.6662750850166987
+                  ]
+                }
+              },
+              {
+                "index": 3981,
+                "x": 13,
+                "y": 31,
+                "stage": "object_id",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 2,
+                  "depth": 0.9905583623121305,
+                  "albedo": [
+                    0.25,
+                    0.55,
+                    0.3
+                  ],
+                  "linear": [
+                    0.21461425831257325,
+                    0.4273090111801428,
+                    0.2500633837905015
+                  ],
+                  "srgb": [
+                    0.4573824055468337,
+                    0.5832818246057221,
+                    0.48457479601433334
+                  ]
+                },
+                "test": {
+                  "covered": true,
+                  "obj_id": 1,
+                  "depth": 0.9905590415000916,
+                  "albedo": [
+                    0.3984779119491577,
+                    0.39707255363464355,
+                    0.7515220642089844
+                  ],
+                  "linear": [
+                    0.28366944193840027,
+                    0.28267306089401245,
+                    0.5339715480804443
+                  ],
+                  "srgb": [
+                    0.5074304897688168,
+                    0.5067882432224714,
+                    0.6246643094117503
+                  ]
+                }
+              },
+              {
+                "index": 3982,
+                "x": 14,
+                "y": 31,
+                "stage": "object_id",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 2,
+                  "depth": 0.9905821987430438,
+                  "albedo": [
+                    0.25,
+                    0.55,
+                    0.3
+                  ],
+                  "linear": [
+                    0.21473575470563325,
+                    0.4274305075732028,
+                    0.2501848801835615
+                  ],
+                  "srgb": [
+                    0.45748188810456475,
+                    0.5833347961173014,
+                    0.4846621595560772
+                  ]
+                },
+                "test": {
+                  "covered": true,
+                  "obj_id": 1,
+                  "depth": 0.9905828833580017,
+                  "albedo": [
+                    0.592096209526062,
+                    0.34544098377227783,
+                    0.5579037666320801
+                  ],
+                  "linear": [
+                    0.42095649242401123,
+                    0.24608227610588074,
+                    0.3967146575450897
+                  ],
+                  "srgb": [
+                    0.5804908561615183,
+                    0.481691602168765,
+                    0.5694392469337862
+                  ]
+                }
+              },
+              {
+                "index": 3983,
+                "x": 15,
+                "y": 31,
+                "stage": "object_id",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 2,
+                  "depth": 0.990606035173957,
+                  "albedo": [
+                    0.25,
+                    0.55,
+                    0.3
+                  ],
+                  "linear": [
+                    0.21484994669548566,
+                    0.4275446995630552,
+                    0.2502990721734139
+                  ],
+                  "srgb": [
+                    0.4575753469648642,
+                    0.5833845691360582,
+                    0.4847442372531147
+                  ]
+                },
+                "test": {
+                  "covered": true,
+                  "obj_id": 1,
+                  "depth": 0.9906067252159119,
+                  "albedo": [
+                    0.7864394187927246,
+                    0.2936161458492279,
+                    0.3635605573654175
+                  ],
+                  "linear": [
+                    0.5587567687034607,
+                    0.20935368537902832,
+                    0.2589430510997772
+                  ],
+                  "srgb": [
+                    0.633025146754252,
+                    0.45302937608658783,
+                    0.4908647285185967
+                  ]
+                }
+              },
+              {
+                "index": 3984,
+                "x": 16,
+                "y": 31,
+                "stage": "object_id",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 2,
+                  "depth": 0.9906298716048704,
+                  "albedo": [
+                    0.25,
+                    0.55,
+                    0.3
+                  ],
+                  "linear": [
+                    0.21495667187135972,
+                    0.42765142473892925,
+                    0.250405797349288
+                  ],
+                  "srgb": [
+                    0.45766265727478167,
+                    0.583431075476021,
+                    0.48482091869039384
+                  ]
+                },
+                "test": {
+                  "covered": true,
+                  "obj_id": 1,
+                  "depth": 0.9906305074691772,
+                  "albedo": [
+                    0.949999988079071,
+                    0.25,
+                    0.20000000298023224
+                  ],
+                  "linear": [
+                    0.6747318506240845,
+                    0.17844411730766296,
+                    0.14299499988555908
+                  ],
+                  "srgb": [
+                    0.6673482047185169,
+                    0.4254700383833424,
+                    0.38872886078430985
+                  ]
+                }
+              },
+              {
+                "index": 3985,
+                "x": 17,
+                "y": 31,
+                "stage": "object_id",
+                "ref": {
+                  "covered": true,
+                  "obj_id": 2,
+                  "depth": 0.9906537080357836,
+                  "albedo": [
+                    0.25,
+                    0.55,
+                    0.3
+                  ],
+                  "linear": [
+                    0.2150557719862791,
+                    0.4277505248538486,
+                    0.25050489746420734
+                  ],
+                  "srgb": [
+                    0.4577436972694547,
+                    0.5834742486646036,
+                    0.4848920961964241
+                  ]
+                },
+                "test": {
+                  "covered": true,
+                  "obj_id": 1,
+                  "depth": 0.9906543493270874,
+                  "albedo": [
+                    0.9499999284744263,
+                    0.25,
+                    0.20000000298023224
+                  ],
+                  "linear": [
+                    0.6747444272041321,
+                    0.17845675349235535,
+                    0.14300763607025146
+                  ],
+                  "srgb": [
+                    0.6673515545021234,
+                    0.4254820678822684,
+                    0.388743154417203
+                  ]
+                }
+              }
+            ]
+          },
+          "depth": {
+            "count": 0,
+            "edge_count": 0,
+            "interior_count": 0,
+            "provenance": "深度差超过硬限：深度约定或插值错误。",
+            "samples": []
+          },
+          "texture_sampling": {
+            "count": 0,
+            "edge_count": 0,
+            "interior_count": 0,
+            "provenance": "反照率(albedo)不同：纹理格式/双线性采样差异起始于此。",
+            "samples": []
+          },
+          "shading": {
+            "count": 0,
+            "edge_count": 0,
+            "interior_count": 0,
+            "provenance": "反照率一致但线性 HDR 不同：光照/法线/快速数学差异。",
+            "samples": []
+          },
+          "blend_write": {
+            "count": 0,
+            "edge_count": 0,
+            "interior_count": 0,
+            "provenance": "反照率一致、被测档声明定长 8 位写回：差异始于写回量化。",
+            "samples": []
+          },
+          "color_mapping": {
+            "count": 0,
+            "edge_count": 0,
+            "interior_count": 0,
+            "provenance": "线性 HDR 一致但 sRGB 不同：色调映射/OETF 差异。",
+            "samples": []
+          }
+        },
+        "first_diverging_stage": "coverage",
+        "contributing_pixels": 84,
+        "repro_window": {
+          "x0": 10,
+          "y0": 30,
+          "x1": 93,
+          "y1": 72
+        },
+        "repro_command": {
+          "trace_pixel": [
+            51,
+            51
+          ],
+          "profiles": {
+            "cpu_ref": "reference_f64",
+            "vector_f32": "strict_f32"
+          },
+          "cli": "python -m backend.cli --scene depth_near --width 128 --profile cpu_ref=reference_f64 --profile vector_f32=strict_f32 --trace 51,51 --out reports/repro",
+          "bbox": [
+            10,
+            30,
+            93,
+            72
+          ],
+          "scene": "depth_near",
+          "width": 128
+        },
+        "propagation": "覆盖/深度差异会沿光栅化传播为相邻像素的颜色差异；归因按管线顺序取首个差异阶段，颜色映射只作为末端结果。",
+        "channel_swap_probe": {
+          "triggered": false,
+          "identity_mean_abs": 0.0008885323936169414,
+          "best_permutation": [
+            1,
+            0,
+            2
+          ],
+          "best_permutation_mean_abs": 0.10860928015530477,
+          "reason": "原始误差低于嫌疑阈值，不构成通道交换。"
+        },
+        "depth_convention_probe": {
+          "triggered": false,
+          "mean_abs": 4.5713151207131636e-08,
+          "sign_consistency": 0.5741279069767442,
+          "reason": "深度差不足以判定约定不一致。"
+        },
+        "samples": [
+          {
+            "index": 9164,
+            "x": 76,
+            "y": 71,
+            "stage": "coverage",
+            "ref": {
+              "covered": true,
+              "obj_id": 3,
+              "depth": 0.983890222968709,
+              "albedo": [
+                0.9,
+                0.6,
+                0.2
+              ],
+              "linear": [
+                0.6173235686396149,
+                0.4115490457668383,
+                0.137183015269803
+              ],
+              "srgb": [
+                0.6512645951904226,
+                0.5762791863071196,
+                0.3820504964607457
+              ]
+            },
+            "test": {
+              "covered": false,
+              "obj_id": 0,
+              "depth": "inf",
+              "albedo": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "linear": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "srgb": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          },
+          {
+            "index": 9165,
+            "x": 77,
+            "y": 71,
+            "stage": "coverage",
+            "ref": {
+              "covered": true,
+              "obj_id": 3,
+              "depth": 0.9838902229687089,
+              "albedo": [
+                0.9,
+                0.6,
+                0.2
+              ],
+              "linear": [
+                0.6173235686399585,
+                0.411549045767182,
+                0.13718301527014667
+              ],
+              "srgb": [
+                0.6512645951905238,
+                0.5762791863072751,
+                0.3820504964611468
+              ]
+            },
+            "test": {
+              "covered": false,
+              "obj_id": 0,
+              "depth": "inf",
+              "albedo": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "linear": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "srgb": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          },
+          {
+            "index": 9166,
+            "x": 78,
+            "y": 71,
+            "stage": "coverage",
+            "ref": {
+              "covered": true,
+              "obj_id": 3,
+              "depth": 0.983890222968709,
+              "albedo": [
+                0.9,
+                0.6,
+                0.2
+              ],
+              "linear": [
+                0.6173235686403109,
+                0.4115490457675343,
+                0.13718301527049898
+              ],
+              "srgb": [
+                0.6512645951906277,
+                0.5762791863074347,
+                0.3820504964615581
+              ]
+            },
+            "test": {
+              "covered": false,
+              "obj_id": 0,
+              "depth": "inf",
+              "albedo": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "linear": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "srgb": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          },
+          {
+            "index": 9167,
+            "x": 79,
+            "y": 71,
+            "stage": "coverage",
+            "ref": {
+              "covered": true,
+              "obj_id": 3,
+              "depth": 0.983890222968709,
+              "albedo": [
+                0.9,
+                0.6,
+                0.2
+              ],
+              "linear": [
+                0.6173235686406721,
+                0.41154904576789547,
+                0.13718301527086013
+              ],
+              "srgb": [
+                0.6512645951907342,
+                0.5762791863075983,
+                0.3820504964619797
+              ]
+            },
+            "test": {
+              "covered": false,
+              "obj_id": 0,
+              "depth": "inf",
+              "albedo": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "linear": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "srgb": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          },
+          {
+            "index": 9168,
+            "x": 80,
+            "y": 71,
+            "stage": "coverage",
+            "ref": {
+              "covered": true,
+              "obj_id": 3,
+              "depth": 0.983890222968709,
+              "albedo": [
+                0.9,
+                0.6,
+                0.2
+              ],
+              "linear": [
+                0.6173235686410422,
+                0.4115490457682657,
+                0.13718301527123036
+              ],
+              "srgb": [
+                0.6512645951908433,
+                0.576279186307766,
+                0.3820504964624119
+              ]
+            },
+            "test": {
+              "covered": false,
+              "obj_id": 0,
+              "depth": "inf",
+              "albedo": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "linear": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "srgb": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          },
+          {
+            "index": 3979,
+            "x": 11,
+            "y": 31,
+            "stage": "object_id",
+            "ref": {
+              "covered": true,
+              "obj_id": 2,
+              "depth": 0.9905106894503041,
+              "albedo": [
+                0.25,
+                0.55,
+                0.3
+              ],
+              "linear": [
+                0.21435002085430357,
+                0.4270447737218731,
+                0.24979914633223183
+              ],
+              "srgb": [
+                0.4571658828777015,
+                0.5831665666621394,
+                0.484384665597456
+              ]
+            },
+            "test": {
+              "covered": true,
+              "obj_id": 1,
+              "depth": 0.990511417388916,
+              "albedo": [
+                0.20000000298023224,
+                0.44999998807907104,
+                0.949999988079071
+              ],
+              "linear": [
+                0.14291971921920776,
+                0.3201653063297272,
+                0.6746565699577332
+              ],
+              "srgb": [
+                0.38864368587705583,
+                0.5296508791342813,
+                0.6673281521374403
+              ]
+            }
+          },
+          {
+            "index": 3980,
+            "x": 12,
+            "y": 31,
+            "stage": "object_id",
+            "ref": {
+              "covered": true,
+              "obj_id": 2,
+              "depth": 0.9905345258812173,
+              "albedo": [
+                0.25,
+                0.55,
+                0.3
+              ],
+              "linear": [
+                0.21448562376993358,
+                0.4271803766375031,
+                0.24993474924786183
+              ],
+              "srgb": [
+                0.45727702701365863,
+                0.5832257243751504,
+                0.48448225959018026
+              ]
+            },
+            "test": {
+              "covered": true,
+              "obj_id": 1,
+              "depth": 0.9905351400375366,
+              "albedo": [
+                0.20558033883571625,
+                0.44851189851760864,
+                0.9444196820259094
+              ],
+              "linear": [
+                0.14689257740974426,
+                0.31912681460380554,
+                0.6707167625427246
+              ],
+              "srgb": [
+                0.39309275467835303,
+                0.5290514479271631,
+                0.6662750850166987
+              ]
+            }
+          },
+          {
+            "index": 3981,
+            "x": 13,
+            "y": 31,
+            "stage": "object_id",
+            "ref": {
+              "covered": true,
+              "obj_id": 2,
+              "depth": 0.9905583623121305,
+              "albedo": [
+                0.25,
+                0.55,
+                0.3
+              ],
+              "linear": [
+                0.21461425831257325,
+                0.4273090111801428,
+                0.2500633837905015
+              ],
+              "srgb": [
+                0.4573824055468337,
+                0.5832818246057221,
+                0.48457479601433334
+              ]
+            },
+            "test": {
+              "covered": true,
+              "obj_id": 1,
+              "depth": 0.9905590415000916,
+              "albedo": [
+                0.3984779119491577,
+                0.39707255363464355,
+                0.7515220642089844
+              ],
+              "linear": [
+                0.28366944193840027,
+                0.28267306089401245,
+                0.5339715480804443
+              ],
+              "srgb": [
+                0.5074304897688168,
+                0.5067882432224714,
+                0.6246643094117503
+              ]
+            }
+          },
+          {
+            "index": 3982,
+            "x": 14,
+            "y": 31,
+            "stage": "object_id",
+            "ref": {
+              "covered": true,
+              "obj_id": 2,
+              "depth": 0.9905821987430438,
+              "albedo": [
+                0.25,
+                0.55,
+                0.3
+              ],
+              "linear": [
+                0.21473575470563325,
+                0.4274305075732028,
+                0.2501848801835615
+              ],
+              "srgb": [
+                0.45748188810456475,
+                0.5833347961173014,
+                0.4846621595560772
+              ]
+            },
+            "test": {
+              "covered": true,
+              "obj_id": 1,
+              "depth": 0.9905828833580017,
+              "albedo": [
+                0.592096209526062,
+                0.34544098377227783,
+                0.5579037666320801
+              ],
+              "linear": [
+                0.42095649242401123,
+                0.24608227610588074,
+                0.3967146575450897
+              ],
+              "srgb": [
+                0.5804908561615183,
+                0.481691602168765,
+                0.5694392469337862
+              ]
+            }
+          },
+          {
+            "index": 3983,
+            "x": 15,
+            "y": 31,
+            "stage": "object_id",
+            "ref": {
+              "covered": true,
+              "obj_id": 2,
+              "depth": 0.990606035173957,
+              "albedo": [
+                0.25,
+                0.55,
+                0.3
+              ],
+              "linear": [
+                0.21484994669548566,
+                0.4275446995630552,
+                0.2502990721734139
+              ],
+              "srgb": [
+                0.4575753469648642,
+                0.5833845691360582,
+                0.4847442372531147
+              ]
+            },
+            "test": {
+              "covered": true,
+              "obj_id": 1,
+              "depth": 0.9906067252159119,
+              "albedo": [
+                0.7864394187927246,
+                0.2936161458492279,
+                0.3635605573654175
+              ],
+              "linear": [
+                0.5587567687034607,
+                0.20935368537902832,
+                0.2589430510997772
+              ],
+              "srgb": [
+                0.633025146754252,
+                0.45302937608658783,
+                0.4908647285185967
+              ]
+            }
+          }
+        ]
+      },
+      "stats": {
+        "edge": {
+          "srgb_abs": {
+            "sum": 1.6252626731272368e-05,
+            "max": 3.2916262904247873e-07,
+            "count": 579,
+            "mean": 2.807016706610081e-08,
+            "p99": 2.0977901693530754e-07,
+            "rmse": 4.8076666325987353e-08
+          },
+          "srgb_rel": {
+            "sum": 3.079534340311583e-05,
+            "max": 6.200976280549233e-07,
+            "count": 579,
+            "mean": 5.318712159432786e-08,
+            "p99": 3.5221124469487334e-07,
+            "rmse": 8.817541968991187e-08
+          },
+          "linear_abs": {
+            "sum": 3.1964945750591334e-05,
+            "max": 5.752895917976453e-07,
+            "count": 579,
+            "mean": 5.520716019100403e-08,
+            "p99": 4.736839820385086e-07,
+            "rmse": 9.836868130992031e-08
+          },
+          "depth_abs": {
+            "sum": 7.72579944785523e-06,
+            "max": 1.2393889625705867e-07,
+            "count": 193,
+            "mean": 4.003004895261777e-08,
+            "p99": 1.236327794584824e-07,
+            "rmse": 4.918110532353214e-08
+          }
+        },
+        "interior": {
+          "srgb_abs": {
+            "sum": 2.420674728699129,
+            "max": 0.2096855474437352,
+            "count": 3549,
+            "mean": 0.0006820723383204083,
+            "p99": 1.9201883816322152e-07,
+            "rmse": 0.009871948052371118
+          },
+          "srgb_rel": {
+            "sum": 4.090486345955433,
+            "max": 0.31420710501825533,
+            "count": 3549,
+            "mean": 0.0011525743437462476,
+            "p99": 3.7723904663698766e-07,
+            "rmse": 0.016213688647865796
+          },
+          "linear_abs": {
+            "sum": 4.435029011743023,
+            "max": 0.4597751787527248,
+            "count": 3549,
+            "mean": 0.001249655962734016,
+            "p99": 3.475664462904149e-07,
+            "rmse": 0.01935500985498889
+          },
+          "depth_abs": {
+            "sum": 5.5175496613157904e-05,
+            "max": 7.2793861194409e-07,
+            "count": 1183,
+            "mean": 4.6640318354317755e-08,
+            "p99": 1.388209847075217e-07,
+            "rmse": 7.34543208095505e-08
+          }
+        },
+        "all_srgb_abs": {
+          "sum": 2.4206909813258632,
+          "max": 0.2096855474437352,
+          "count": 4128,
+          "mean": 0.0005864076989645986,
+          "p99": 1.9201883816322152e-07,
+          "rmse": 0.00915347535850672
+        },
+        "all_srgb_rel": {
+          "sum": 4.090517141298842,
+          "max": 0.31420710501825533,
+          "count": 4128,
+          "mean": 0.0009909198501208436,
+          "p99": 3.630080756717302e-07,
+          "rmse": 0.015033669010562106
+        },
+        "all_linear_abs": {
+          "sum": 4.435060976688765,
+          "max": 0.4597751787527248,
+          "count": 4128,
+          "mean": 0.0010743849265234411,
+          "p99": 3.520481212104798e-07,
+          "rmse": 0.01794636730576931
+        },
+        "all_depth_abs": {
+          "sum": 6.290129606101313e-05,
+          "max": 7.2793861194409e-07,
+          "count": 1376,
+          "mean": 4.5713151207131636e-08,
+          "p99": 1.361919712561388e-07,
+          "rmse": 7.05550323198363e-08
+        },
+        "pixels_total": 16384,
+        "background_pixels": 14991,
+        "model_union_pixels": 1393,
+        "coverage_both": 1376,
+        "coverage_ref_only": 17,
+        "coverage_test_only": 0,
+        "edge_band_pixels": 193,
+        "interior_pixels": 1183,
+        "nonfinite": {
+          "count": 0,
+          "samples": []
+        }
+      },
+      "structural": {
+        "ref_only_count": 17,
+        "test_only_count": 0,
+        "ref_only_indices": [
+          9164,
+          9165,
+          9166,
+          9167,
+          9168,
+          9169,
+          9170,
+          9171,
+          9172,
+          9173,
+          9174,
+          9175,
+          9176,
+          9177,
+          9178,
+          9179,
+          9180
+        ],
+        "test_only_indices": [],
+        "id_mismatch": [
+          {
+            "index": 3979,
+            "region": "interior",
+            "ref_id": 2,
+            "test_id": 1
+          },
+          {
+            "index": 3980,
+            "region": "interior",
+            "ref_id": 2,
+            "test_id": 1
+          },
+          {
+            "index": 3981,
+            "region": "interior",
+            "ref_id": 2,
+            "test_id": 1
+          },
+          {
+            "index": 3982,
+            "region": "interior",
+            "ref_id": 2,
+            "test_id": 1
+          },
+          {
+            "index": 3983,
+            "region": "interior",
+            "ref_id": 2,
+            "test_id": 1
+          },
+          {
+            "index": 3984,
+            "region": "interior",
+            "ref_id": 2,
+            "test_id": 1
+          },
+          {
+            "index": 3985,
+            "region": "interior",
+            "ref_id": 2,
+            "test_id": 1
+          }
+        ],
+        "depth_far_mismatch": [],
+        "total": 24
+      },
+      "nonfinite": {
+        "count": 0,
+        "samples": []
+      },
+      "tolerance": {
+        "srgb_abs_max": 0.00196078431372549,
+        "srgb_abs_p99": 0.000980392156862745,
+        "color_rel_eps": 0.0001,
+        "color_rel_max": 0.02,
+        "depth_rel_eps": 1e-07,
+        "depth_abs_hard": 0.0001,
+        "depth_abs_typical": 1e-06,
+        "coverage_tolerance": 0,
+        "rules_version": "acceptance-2026.11-v2",
+        "rules_changelog": {
+          "acceptance-2026.11-v1": "初版逐像素比较：仅统计模型有效区域；覆盖/对象标识不一致记为结构差异；sRGB 绝对误差 0.5/255、深度硬限 1e-4。",
+          "acceptance-2026.11-v2": "按操作与有效像素制定验收：拆出 coverage/object_id/depth/final_color_inherited/final_color_primary/linear_hdr/finite 七条规则；显式通道交换探测与深度约定探测；非有限值独立失败类；允许偏差按像素类别(内部/边缘)分别给出。"
+        },
+        "operations": {
+          "coverage": {
+            "effective_pixels": "模型并集 (ref_cov 或 test_cov)",
+            "allowed_disagreement": 0,
+            "failure_class": "coverage_struct",
+            "provenance": "覆盖归属无数值容差；缺失/新增一个模型像素即结构差异，不得被颜色阈值吸收。"
+          },
+          "object_id": {
+            "effective_pixels": "两路径共同覆盖像素",
+            "allowed_mismatch": 0,
+            "failure_class": "object_id",
+            "provenance": "对象标识不一致代表几何归属错误，与浮点误差无关。"
+          },
+          "depth": {
+            "effective_pixels": "共同覆盖且深度有限",
+            "allowed_abs_internal": 0.0001,
+            "allowed_abs_edge": 0.0001,
+            "failure_class": "depth_convention",
+            "provenance": "NDC 深度差超过 1e-4 视为深度约定/对应错误；f32 深度舍入典型 1e-6~1e-7，远低于该硬限。"
+          },
+          "final_color_inherited": {
+            "effective_pixels": "共同覆盖、有限、且在上一设备中已被同一对象覆盖",
+            "allowed_abs_internal": 0.00196078431372549,
+            "allowed_abs_edge": 0.00392156862745098,
+            "allowed_rel": 0.02,
+            "failure_class": "precision_exceeded",
+            "provenance": "输入颜色已由上游设备确定，只允许采样/写回引入的偏差；内部=半个量化步长，边缘带放宽到一步长。"
+          },
+          "final_color_primary": {
+            "effective_pixels": "上一设备未覆盖但本设备覆盖(差异被本次引入)的共同覆盖像素",
+            "allowed_abs_internal": 0.00196078431372549,
+            "allowed_abs_edge": 0.00392156862745098,
+            "allowed_rel": 0.02,
+            "failure_class": "precision_exceeded",
+            "provenance": "差异由本次设备的采样/颜色路径首次引入，按同口径判定。"
+          },
+          "blend_write_quantized": {
+            "effective_pixels": "共同覆盖、对象一致、被测设备声明 fixed8_blend",
+            "allowed_abs_internal": 0.01568627450980392,
+            "allowed_abs_edge": 0.01568627450980392,
+            "allowed_rel": 0.05,
+            "failure_class": "blend_quantization_exceeded",
+            "provenance": "8 位线性写回在强高光下会被映射放大；允许最多约 4 个 sRGB 量化步长，超过则说明写回量化已产生可见偏差。"
+          },
+          "linear_hdr": {
+            "effective_pixels": "共同覆盖、对象标识一致且有限",
+            "allowed_rel": 0.02,
+            "failure_class": "precision_exceeded",
+            "provenance": "线性 HDR 相对误差用于定位色调映射之前的颜色路径偏差；Reinhard 会压缩差异，故需在映射前检查。"
+          },
+          "finite": {
+            "effective_pixels": "反照率/颜色/深度的所有输出",
+            "allowed_nonfinite": 0,
+            "failure_class": "non_finite",
+            "provenance": "NaN/Inf 独立失败类；任何全局阈值都不得将其吞掉。"
+          }
+        },
+        "channel_swap": {
+          "trigger_abs": 0.00784313725490196,
+          "explained_abs": 0.000980392156862745,
+          "min_improvement_factor": 8.0,
+          "failure_class": "channel_swap",
+          "provenance": "若交换通道后误差降到 0.25/255 以下且至少改善 8 倍，而原始误差已超过 2/255，则判为通道交换而非数值噪声。"
+        },
+        "depth_convention": {
+          "suspicion_abs": 0.001,
+          "failure_class": "depth_convention",
+          "provenance": "深度差普遍超过 1e-3 且与几何无关地同向，判为深度约定不一致。"
+        },
+        "provenance": {
+          "srgb_abs_max": "0.5/255：8 位 sRGB 半个量化步长，f32 正确舍入不应超过。",
+          "srgb_abs_p99": "0.25/255：99 分位收紧到四分之一步长，防止个别高光像素掩盖系统性偏差。",
+          "color_rel_eps": "1e-4：暗部相对误差分母下限，低于此值改用绝对误差判定。",
+          "depth_abs_hard": "1e-4：超过即判深度对应错误；典型 f32 深度舍入约 1e-6~1e-7。",
+          "coverage_tolerance": "覆盖/对象标识无容差，任何不一致都按结构错误上报。"
+        }
+      }
+    }
+  ],
+  "unverified": [
+    {
+      "device": "cpu_ref",
+      "profile": "strict_f32",
+      "supported_by_device": true,
+      "missing_fields": [],
+      "reason": "本次未执行此组合"
+    },
+    {
+      "device": "cpu_ref",
+      "profile": "fast_math_f32",
+      "supported_by_device": true,
+      "missing_fields": [],
+      "reason": "本次未执行此组合"
+    },
+    {
+      "device": "cpu_ref",
+      "profile": "rgba8_texture_f32",
+      "supported_by_device": true,
+      "missing_fields": [],
+      "reason": "本次未执行此组合"
+    },
+    {
+      "device": "cpu_ref",
+      "profile": "fixed8_blend_f32",
+      "supported_by_device": true,
+      "missing_fields": [],
+      "reason": "本次未执行此组合"
+    },
+    {
+      "device": "cpu_ref",
+      "profile": "degraded_rgba8_fixed8_f32",
+      "supported_by_device": true,
+      "missing_fields": [],
+      "reason": "本次未执行此组合"
+    },
+    {
+      "device": "vector_f32",
+      "profile": "reference_f64",
+      "supported_by_device": false,
+      "missing_fields": [
+        "precision"
+      ],
+      "reason": "设备未声明该能力，未验证"
+    },
+    {
+      "device": "vector_f32",
+      "profile": "fast_math_f32",
+      "supported_by_device": true,
+      "missing_fields": [],
+      "reason": "本次未执行此组合"
+    },
+    {
+      "device": "vector_f32",
+      "profile": "rgba8_texture_f32",
+      "supported_by_device": true,
+      "missing_fields": [],
+      "reason": "本次未执行此组合"
+    },
+    {
+      "device": "vector_f32",
+      "profile": "fixed8_blend_f32",
+      "supported_by_device": true,
+      "missing_fields": [],
+      "reason": "本次未执行此组合"
+    },
+    {
+      "device": "vector_f32",
+      "profile": "degraded_rgba8_fixed8_f32",
+      "supported_by_device": true,
+      "missing_fields": [],
+      "reason": "本次未执行此组合"
+    },
+    {
+      "device": "gpu_cuda",
+      "profile": "reference_f64",
+      "supported_by_device": false,
+      "missing_fields": [
+        "precision"
+      ],
+      "reason": "设备不可用/本次未选择"
+    },
+    {
+      "device": "gpu_cuda",
+      "profile": "strict_f32",
+      "supported_by_device": true,
+      "missing_fields": [],
+      "reason": "设备不可用/本次未选择"
+    },
+    {
+      "device": "gpu_cuda",
+      "profile": "fast_math_f32",
+      "supported_by_device": true,
+      "missing_fields": [],
+      "reason": "设备不可用/本次未选择"
+    },
+    {
+      "device": "gpu_cuda",
+      "profile": "rgba8_texture_f32",
+      "supported_by_device": false,
+      "missing_fields": [
+        "texture_format"
+      ],
+      "reason": "设备不可用/本次未选择"
+    },
+    {
+      "device": "gpu_cuda",
+      "profile": "fixed8_blend_f32",
+      "supported_by_device": false,
+      "missing_fields": [
+        "blend_capability"
+      ],
+      "reason": "设备不可用/本次未选择"
+    },
+    {
+      "device": "gpu_cuda",
+      "profile": "degraded_rgba8_fixed8_f32",
+      "supported_by_device": false,
+      "missing_fields": [
+        "texture_format",
+        "blend_capability"
+      ],
+      "reason": "设备不可用/本次未选择"
+    }
+  ],
+  "pixel_trace": null
+}

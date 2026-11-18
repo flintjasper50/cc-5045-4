@@ -56,7 +56,9 @@ class Framebuffer:
 
     Background stays exactly (0,0,0) color with id 0 and depth +inf, so the
     comparison stage can distinguish true background from a rendered model
-    pixel that happens to be black.
+    pixel that happens to be black.  ``albedo`` records the base color that
+    entered shading so the attribution stage can separate texture/sampling
+    from the lighting + tone-map tail.
     """
 
     def __init__(self, width, height):
@@ -64,6 +66,7 @@ class Framebuffer:
         self.height = height
         n = width * height
         self.color = [[0.0, 0.0, 0.0] for _ in range(n)]
+        self.albedo = [[0.0, 0.0, 0.0] for _ in range(n)]
         self.depth = [_F32_INF] * n
         self.obj_id = [0] * n
         # True once a primitive covered the pixel (background never sets it).

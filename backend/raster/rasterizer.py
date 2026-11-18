@@ -1,19 +1,27 @@
-"""Shared rasterizer scaffitting: projection, interpolation, per-pixel shading.
+"""Shared rasterizer scaffolding: projection, interpolation, per-pixel shading.
 
-The two concrete backends (`cpu_ref` and `vector_path`) reuse these helpers so
+The two concrete backends (`cpu_ref` and `vector_f32`) reuse these helpers so
 that camera, coordinate system, texture sampling and color transform are
 identical.  They deliberately differ in *how pixels are visited* and in which
 floating-point precision the edge/interpolation math runs.
+
+A render profile supplies the rest of the declared capabilities:
+``precision`` (f64/f32), ``fast_math``, ``texture_format``,
+``blend_capability``, ``depth_convention`` and ``depth_test``.  Every one of
+those is recorded in the result so a difference can be traced to a declared
+capability rather than blamed on "hardware".
 """
-from .geometry import (mat_vec, shade, tone_map)
-from .vector import Framebuffer, f32, f32add, f32mul, f32div, clamp
+from .geometry import (apply_texture_format, convert_depth, mat_vec, shade,
+                       tone_map)
+from .vector import Framebuffer, f32, f32add, f32mul, f32div
 
 
 class Rasterizer:
     name = "base"
     precision = "f64"
 
-    def __init__(self, width, height, texture, trace_pixel=None):
+    def __init__(self, width, height, texture, trace_pixel=None,
+                 profile=None):
         self.w = width
         self.h = height
         self.tex = texture
@@ -21,6 +29,18 @@ class Rasterizer:
         # When set, collect a detailed decision record for this (x, y).
         self.trace_pixel = trace_pixel
         self.trace = []
+        if profile is None:
+            profile = {"id": "reference_f64", "precision": "f64",
+                       "fast_math": False, "texture_format": "float32_bilinear",
+                       "blend_capability": "float_blend",
+                       "depth_convention": "ndc_minus1_1", "depth_test": "less"}
+        self.profile = profile
+        self.precision = profile.get("precision") or self.precision
+        self.fast_math = bool(profile.get("fast_math"))
+        self.texture_format = profile.get("texture_format", "float32_bilinear")
+        self.blend_capability = profile.get("blend_capability", "float_blend")
+        self.depth_convention = profile.get("depth_convention", "ndc_minus1_1")
+        self.depth_test = profile.get("depth_test", "less")
 
     # -- transform one triangle to clip/screen space -----------------------
     def project(self, tri, vp):
@@ -83,7 +103,8 @@ class Rasterizer:
     # -- resolve material base color through the shared texture ------------
     def base_color(self, tri, uv):
         if tri.material.get("use_texture"):
-            sampled = self.tex.sample_linear(uv[0], uv[1])
+            sampled = self.tex.sample_linear(uv[0], uv[1], self.precision)
+            sampled = apply_texture_format(sampled, self.texture_format)
             boost = tri.material.get("boost", 1.0)
             return (sampled[0] * boost, sampled[1] * boost, sampled[2] * boost)
         col = tri.material["color"]
@@ -94,14 +115,29 @@ class Rasterizer:
         linear = shade(world, tri.normal, base, self.scene_light,
                        self.camera_eye, self.precision,
                        tri.material["spec_power"],
-                       tri.material["spec_intensity"])
-        return linear
+                       tri.material["spec_intensity"],
+                       fast_math=self.fast_math)
+        return base, linear
 
-    def write_pixel(self, x, y, linear, depth, obj_id):
+    def _quantize_blend(self, linear):
+        from .geometry import BLEND_CAPABILITIES, quantize_unit
+        levels = BLEND_CAPABILITIES[self.blend_capability]["quantize_bits"]
+        if levels is None:
+            return linear
+        return [quantize_unit(c, levels) for c in linear]
+
+    def depth_passes(self, candidate, stored):
+        """Declared depth test.  Returns True when the primitive wins."""
+        if self.depth_test == "less_equal":
+            return candidate <= stored
+        return candidate < stored
+
+    def write_pixel(self, x, y, linear, depth, obj_id, albedo):
         i = self.fb.idx(x, y)
-        if depth < self.fb.depth[i]:
+        if self.depth_passes(depth, self.fb.depth[i]):
             self.fb.depth[i] = f32(depth) if self.precision == "f32" else depth
-            self.fb.color[i] = list(linear)
+            self.fb.color[i] = self._quantize_blend(linear)
+            self.fb.albedo[i] = list(albedo)
             self.fb.obj_id[i] = obj_id
             self.fb.covered[i] = 1
 
@@ -112,8 +148,12 @@ class Rasterizer:
             if not self.fb.covered[i]:
                 out.append([0.0, 0.0, 0.0])
             else:
-                out.append(tone_map(c, exposure))
+                out.append(tone_map(c, exposure, fast_math=self.fast_math))
         return out
+
+    def finalize_depth(self, raw_depth):
+        """Apply the declared depth convention to the interpolated NDC depth."""
+        return convert_depth(raw_depth, self.depth_convention)
 
     def render(self, scene):
         raise NotImplementedError

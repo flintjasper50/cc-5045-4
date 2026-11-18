@@ -98,3 +98,49 @@ footer { padding: 16px 28px 30px; color: var(--muted); font-size: 12px; }
 }
 .pill.gpu-off { background: #4a2f33; color: #f1a7ab; }
 .pill.gpu-on { background: #1d4a33; color: #9fe6c4; }
+
+/* --- capability / attribution / acceptance additions --- */
+.device-rows { display: flex; flex-direction: column; gap: 8px; }
+.device-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 6px 8px; border-radius: 6px;
+}
+.device-row.unavailable { opacity: .6; }
+.device-row .pick { display: flex; align-items: center; gap: 8px; min-width: 260px; }
+.device-row .profile-select { min-width: 260px; }
+.device-row .meta { color: var(--muted); font-size: 12px; }
+.config-row { margin-top: 12px; }
+.run-status-block { margin-bottom: 14px; }
+.run-summary .chip { margin: 2px 4px 2px 0; }
+.chip {
+  display: inline-block; padding: 2px 9px; border-radius: 999px;
+  font-size: 12px; background: var(--panel2); border: 1px solid var(--line);
+}
+.chip.ok { background: #173526; border-color: #2c6b4c; color: #a9eccd; }
+.chip.bad { background: #3a1f22; border-color: #7c3538; color: #f1a7ab; }
+.chip.off { color: var(--muted); }
+.run-issues { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.issue { padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+.issue.bad { background: #3a1f22; border: 1px solid #7c3538; color: #f3c0c2; }
+.issue.warn { background: #3a2f1a; border: 1px solid #6b5320; color: #f3d9a0; }
+.verdict-line { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.verdict-line:last-child { border-bottom: 0; }
+.verdict-line.pass .tag { color: #9fe6c4; }
+.verdict-line.fail .tag { color: #f1a7ab; }
+.verdict .meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.attr-block {
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 14px; margin-bottom: 14px;
+}
+.attr-block h4 { margin: 0 0 8px; font-size: 14px; }
+.attr-block p { margin: 6px 0; }
+.attr-block .meta { color: var(--muted); font-size: 12px; }
+.attr-block table { margin: 8px 0; }
+.attr-block td.left, .attr-block th.left { text-align: left; }
+.attr-block tr.breach td { background: #3a1f22; }
+table.samples { font-size: 12px; }
+table.samples td { font-variant-numeric: tabular-nums; }
+.fail-list { margin: 8px 0 0; padding-left: 18px; }
+.fail-list li { margin: 4px 0; }
+.grid-section { grid-column: 1 / -1; margin-top: 8px; }
+.grid-section h4 { margin: 0; color: var(--accent); font-size: 14px; }

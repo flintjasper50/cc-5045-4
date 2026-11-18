@@ -1,13 +1,16 @@
 """Two genuinely different rasterization compute paths.
 
-* CpuRefPath  -- triangle-driven, scalar float64, top-left fill convention,
-  bounding-box scan with an explicit edge sign computed once per vertex.
-* VectorPath  -- pixel-driven 8x8 tiles, every pixel tests every triangle,
-  all edge/interpolation math rounded to binary32 (f32), the precision class
-  a GPU SIMD lane would use.
+* CpuRefPath  -- triangle-driven, scalar float64, bounding-box scan with an
+  explicit edge sign computed once per vertex; fill convention from the profile.
+* VectorPath  -- pixel-driven 8x8 tiles, every pixel tests every triangle, all
+  edge/interpolation math rounded to binary32 (f32), the precision class a GPU
+  SIMD lane would use.
 
 The difference in precision and in traversal order is real, not scripted:
-sliver coverage and near-coincident depth can legitimately disagree.
+sliver coverage and near-coincident depth can legitimately disagree.  Each
+path additionally honours the declared render profile (fast math, texture
+format, blend capability, depth convention/test); those are explicit knobs,
+not hidden fudge factors.
 """
 from .geometry import view_proj
 from .rasterizer import Rasterizer
@@ -34,7 +37,7 @@ def _top_left(edge_a, edge_b):
     return edge_a["sy"] < edge_b["sy"]  # generally ascending edge
 
 
-def _inside_gpu(weights, edges_tl, area_positive):
+def _inside_gpu(weights, edges_tl):
     for w, is_tl in zip(weights, edges_tl):
         if is_tl:
             if w < 0.0:
@@ -61,7 +64,7 @@ class CpuRefPath(Rasterizer):
                 continue
             xs = [v["sx"] for v in verts]
             ys = [v["sy"] for v in verts]
-            x0 = max(0, int(min(xs)) )
+            x0 = max(0, int(min(xs)))
             x1 = min(self.w - 1, int(max(xs)))
             y0 = max(0, int(min(ys)))
             y1 = min(self.h - 1, int(max(ys)))
@@ -86,14 +89,15 @@ class CpuRefPath(Rasterizer):
                     if not inside:
                         continue
                     world, uv, depth = self.interpolate(verts, w0, w1, w2)
+                    depth = self.finalize_depth(depth)
                     if self.trace_pixel == (x, y):
                         self.trace[-1].update(
                             {"depth_candidate": depth, "world": list(world),
                              "uv": list(uv)})
-                    linear = self.shade_pixel(tri, world, uv)
+                    albedo, linear = self.shade_pixel(tri, world, uv)
                     if self.trace_pixel == (x, y):
                         self.trace[-1]["linear"] = list(linear)
-                    self.write_pixel(x, y, linear, depth, tri.obj_id)
+                    self.write_pixel(x, y, linear, depth, tri.obj_id, albedo)
         return self._result(scene)
 
     def _result(self, scene):
@@ -101,8 +105,10 @@ class CpuRefPath(Rasterizer):
             "device": self.name, "label": self.label, "kind": self.kind,
             "precision": self.precision,
             "fill_convention": self.fill_convention,
+            "profile": self.profile,
             "srgb": self.finalize(scene["exposure"]),
             "linear": [list(c) for c in self.fb.color],
+            "albedo": [list(c) for c in self.fb.albedo],
             "depth": list(self.fb.depth),
             "obj_id": list(self.fb.obj_id),
             "covered": list(self.fb.covered),
@@ -161,13 +167,13 @@ class VectorPath(Rasterizer):
                             w2 = _edge32(verts[0], verts[1], px, py)
                             weights = [w0, w1, w2]
                             if area > 0:
-                                inside = _inside_gpu(weights, tl, True)
+                                inside = _inside_gpu(weights, tl)
                             else:
                                 # reverse winding: negate weights and swap the
                                 # top-left designation to the mirrored edges
                                 inside = _inside_gpu(
                                     [-w0, -w1, -w2],
-                                    [tl[2], tl[1], tl[0]], False)
+                                    [tl[2], tl[1], tl[0]])
                             if self.trace_pixel == (x, y):
                                 self.trace.append({
                                     "triangle": t_index, "obj_id": tri.obj_id,
@@ -179,14 +185,16 @@ class VectorPath(Rasterizer):
                                 continue
                             world, uv, depth = self.interpolate(
                                 verts, w0, w1, w2)
+                            depth = self.finalize_depth(depth)
                             if self.trace_pixel == (x, y):
                                 self.trace[-1].update(
                                     {"depth_candidate": depth,
                                      "world": list(world), "uv": list(uv)})
-                            linear = self.shade_pixel(tri, world, uv)
+                            albedo, linear = self.shade_pixel(tri, world, uv)
                             if self.trace_pixel == (x, y):
                                 self.trace[-1]["linear"] = list(linear)
-                            self.write_pixel(x, y, linear, depth, tri.obj_id)
+                            self.write_pixel(x, y, linear, depth, tri.obj_id,
+                                             albedo)
         return self._result(scene)
 
     def _result(self, scene):
@@ -194,8 +202,10 @@ class VectorPath(Rasterizer):
             "device": self.name, "label": self.label, "kind": self.kind,
             "precision": self.precision,
             "fill_convention": self.fill_convention,
+            "profile": self.profile,
             "srgb": self.finalize(scene["exposure"]),
             "linear": [list(c) for c in self.fb.color],
+            "albedo": [list(c) for c in self.fb.albedo],
             "depth": list(self.fb.depth),
             "obj_id": list(self.fb.obj_id),
             "covered": list(self.fb.covered),

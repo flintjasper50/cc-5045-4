@@ -7,8 +7,8 @@
   "config": {
     "scene": "sliver",
     "triangle_count": 27,
-    "width": 64,
-    "height": 64,
+    "width": 192,
+    "height": 192,
     "camera": {
       "fovy": 45.0,
       "near": 0.1,
@@ -36,14 +36,36 @@
     "python": "3.11.2",
     "platform": "Linux-7.0.14-linuxkit-aarch64-with-glibc2.36",
     "fill_convention": "center-sample (x+0.5,y+0.5), top-left >=0",
-    "config_sha256": "66505a1babce58c27b67f9c10f807bbb29bdd935eac592e708bc8660c5da4de2"
+    "rules_version": "acceptance-2026.11-v2",
+    "config_sha256": "9f6308363b05aa8ac3bd743bc10bf5d5e604ef00b06048331cece5bd1d5fb090"
+  },
+  "rules_version": "acceptance-2026.11-v2",
+  "rules_changelog": {
+    "acceptance-2026.11-v1": "初版逐像素比较：仅统计模型有效区域；覆盖/对象标识不一致记为结构差异；sRGB 绝对误差 0.5/255、深度硬限 1e-4。",
+    "acceptance-2026.11-v2": "按操作与有效像素制定验收：拆出 coverage/object_id/depth/final_color_inherited/final_color_primary/linear_hdr/finite 七条规则；显式通道交换探测与深度约定探测；非有限值独立失败类；允许偏差按像素类别(内部/边缘)分别给出。"
   },
   "gpu_status": {
     "gpu_detected": false,
     "gpu_hardware": null,
     "cuda_module": null,
     "gpu_can_execute": false,
-    "coverage": "本次覆盖：两条真实 CPU 计算实现(f64 参考 / f32 分块)实际执行并比较。GPU 路径因无可用设备或计算栈而未执行——未伪造任何 GPU 输出。接入 CUDA 后同一接口可启用第三路径。"
+    "coverage": "本次覆盖：两条真实 CPU 计算实现(f64 参考 / f32 分块)实际执行并比较。GPU 路径因无可用设备或计算栈而未执行——未伪造任何 GPU 输出。GPU 的精度/格式组合尚未在本机验证，界面中会单独标出。",
+    "cross_device_cases": [
+      {
+        "id": "fill_convention_same_profile",
+        "scene": "depth_near",
+        "width": 128,
+        "devices": [
+          "cpu_ref",
+          "vector_f32"
+        ],
+        "profiles": {
+          "cpu_ref": "strict_f32",
+          "vector_f32": "strict_f32"
+        },
+        "expects": "两套实现即使同为 strict_f32，在近重合/剪影像素上仍会不同；应判为 coverage_struct/object_id，而非 precision_exceeded。"
+      }
+    ]
   },
   "devices": [
     {
@@ -52,6 +74,32 @@
       "kind": "cpu",
       "precision": "float64",
       "available": true,
+      "capabilities": {
+        "precision": [
+          "f64",
+          "f32"
+        ],
+        "fast_math": [
+          false,
+          true
+        ],
+        "texture_format": [
+          "float32_bilinear",
+          "rgba8_linear"
+        ],
+        "blend_capability": [
+          "float_blend",
+          "fixed8_blend"
+        ],
+        "depth_convention": [
+          "ndc_minus1_1",
+          "ndc_0_1"
+        ],
+        "depth_test": [
+          "less",
+          "less_equal"
+        ]
+      },
       "executed_note": "始终可运行：纯标准库标量光栅化，作为参考真值。"
     },
     {
@@ -60,6 +108,31 @@
       "kind": "cpu-simd",
       "precision": "float32 (binary32 舍入)",
       "available": true,
+      "capabilities": {
+        "precision": [
+          "f32"
+        ],
+        "fast_math": [
+          false,
+          true
+        ],
+        "texture_format": [
+          "float32_bilinear",
+          "rgba8_linear"
+        ],
+        "blend_capability": [
+          "float_blend",
+          "fixed8_blend"
+        ],
+        "depth_convention": [
+          "ndc_minus1_1",
+          "ndc_0_1"
+        ],
+        "depth_test": [
+          "less",
+          "less_equal"
+        ]
+      },
       "executed_note": "始终可运行：分块逐像素、f32 运算，模拟 GPU 单精度数据通路。"
     },
     {
@@ -68,9 +141,92 @@
       "kind": "gpu",
       "precision": "float32",
       "available": false,
+      "capabilities": {
+        "precision": [
+          "f32"
+        ],
+        "fast_math": [
+          false,
+          true
+        ],
+        "texture_format": [
+          "float32_bilinear"
+        ],
+        "blend_capability": [
+          "float_blend"
+        ],
+        "depth_convention": [
+          "ndc_minus1_1"
+        ],
+        "depth_test": [
+          "less"
+        ]
+      },
       "executed_note": "未检测到可用 GPU 设备/驱动；GPU 路径标记为未执行，不生成任何 GPU 图像。"
     }
   ],
+  "profiles": {
+    "cpu_ref": {
+      "id": "reference_f64",
+      "label": "参考 f64 · 严格 IEEE · 浮点纹理 · 浮点写回",
+      "diagnostic_only": false,
+      "sources": {
+        "precision": "运算精度：f64=IEEE 双精度参考；f32=每步按 binary32 舍入（GPU 单精度形态）。",
+        "fast_math": "快速数学：启用后用指数近似倒数 + 牛顿迭代、重结合点积，属显式声明的近似通路。",
+        "texture_format": "纹理存储：float32_bilinear=浮点双线性；rgba8_linear=采样后量化到 8 位线性格点(1/255)。",
+        "blend_capability": "混合/写回能力：float_blend=线性浮点写回；fixed8_blend=写回时量化到 8 位线性格点(1/255)。",
+        "depth_convention": "深度约定：ndc_minus1_1=OpenGL 风格 [-1,1(NDC)]；ndc_0_1=D3D/Vulkan 风格 [0,1]（诊断用，刻意引入约定差异）。",
+        "depth_test": "深度测试：less=严格小于；less_equal=近重合表面后写覆盖。"
+      },
+      "precision": "f64",
+      "fast_math": false,
+      "texture_format": "float32_bilinear",
+      "blend_capability": "float_blend",
+      "depth_convention": "ndc_minus1_1",
+      "depth_test": "less",
+      "sha256": "09ba0d3d931c5be96296013d8c957afb899252be284dbcdc0b771e6e0e01988c"
+    },
+    "vector_f32": {
+      "id": "strict_f32",
+      "label": "f32 严格 IEEE · 浮点纹理 · 浮点写回",
+      "diagnostic_only": false,
+      "sources": {
+        "precision": "运算精度：f64=IEEE 双精度参考；f32=每步按 binary32 舍入（GPU 单精度形态）。",
+        "fast_math": "快速数学：启用后用指数近似倒数 + 牛顿迭代、重结合点积，属显式声明的近似通路。",
+        "texture_format": "纹理存储：float32_bilinear=浮点双线性；rgba8_linear=采样后量化到 8 位线性格点(1/255)。",
+        "blend_capability": "混合/写回能力：float_blend=线性浮点写回；fixed8_blend=写回时量化到 8 位线性格点(1/255)。",
+        "depth_convention": "深度约定：ndc_minus1_1=OpenGL 风格 [-1,1(NDC)]；ndc_0_1=D3D/Vulkan 风格 [0,1]（诊断用，刻意引入约定差异）。",
+        "depth_test": "深度测试：less=严格小于；less_equal=近重合表面后写覆盖。"
+      },
+      "precision": "f32",
+      "fast_math": false,
+      "texture_format": "float32_bilinear",
+      "blend_capability": "float_blend",
+      "depth_convention": "ndc_minus1_1",
+      "depth_test": "less",
+      "sha256": "229f81aa85742908c64b75c99fd7118f4ec8db317205681191e3735861312dcf"
+    },
+    "gpu_cuda": {
+      "id": "strict_f32",
+      "label": "f32 严格 IEEE · 浮点纹理 · 浮点写回",
+      "diagnostic_only": false,
+      "sources": {
+        "precision": "运算精度：f64=IEEE 双精度参考；f32=每步按 binary32 舍入（GPU 单精度形态）。",
+        "fast_math": "快速数学：启用后用指数近似倒数 + 牛顿迭代、重结合点积，属显式声明的近似通路。",
+        "texture_format": "纹理存储：float32_bilinear=浮点双线性；rgba8_linear=采样后量化到 8 位线性格点(1/255)。",
+        "blend_capability": "混合/写回能力：float_blend=线性浮点写回；fixed8_blend=写回时量化到 8 位线性格点(1/255)。",
+        "depth_convention": "深度约定：ndc_minus1_1=OpenGL 风格 [-1,1(NDC)]；ndc_0_1=D3D/Vulkan 风格 [0,1]（诊断用，刻意引入约定差异）。",
+        "depth_test": "深度测试：less=严格小于；less_equal=近重合表面后写覆盖。"
+      },
+      "precision": "f32",
+      "fast_math": false,
+      "texture_format": "float32_bilinear",
+      "blend_capability": "float_blend",
+      "depth_convention": "ndc_minus1_1",
+      "depth_test": "less",
+      "sha256": "229f81aa85742908c64b75c99fd7118f4ec8db317205681191e3735861312dcf"
+    }
+  },
   "executed": [
     "cpu_ref",
     "vector_f32"
@@ -78,144 +234,393 @@
   "skipped": [
     "gpu_cuda"
   ],
+  "unsupported": [],
+  "chain": [
+    "cpu_ref",
+    "vector_f32"
+  ],
   "renders": {
     "cpu_ref": {
       "device": "cpu_ref",
       "label": "CPU 参考路径 (标量 f64，逐三角形)",
       "kind": "cpu",
       "precision": "f64",
-      "elapsed_ms": 12.768,
-      "covered_count": 1459
+      "profile": {
+        "id": "reference_f64",
+        "label": "参考 f64 · 严格 IEEE · 浮点纹理 · 浮点写回",
+        "diagnostic_only": false,
+        "sources": {
+          "precision": "运算精度：f64=IEEE 双精度参考；f32=每步按 binary32 舍入（GPU 单精度形态）。",
+          "fast_math": "快速数学：启用后用指数近似倒数 + 牛顿迭代、重结合点积，属显式声明的近似通路。",
+          "texture_format": "纹理存储：float32_bilinear=浮点双线性；rgba8_linear=采样后量化到 8 位线性格点(1/255)。",
+          "blend_capability": "混合/写回能力：float_blend=线性浮点写回；fixed8_blend=写回时量化到 8 位线性格点(1/255)。",
+          "depth_convention": "深度约定：ndc_minus1_1=OpenGL 风格 [-1,1(NDC)]；ndc_0_1=D3D/Vulkan 风格 [0,1]（诊断用，刻意引入约定差异）。",
+          "depth_test": "深度测试：less=严格小于；less_equal=近重合表面后写覆盖。"
+        },
+        "precision": "f64",
+        "fast_math": false,
+        "texture_format": "float32_bilinear",
+        "blend_capability": "float_blend",
+        "depth_convention": "ndc_minus1_1",
+        "depth_test": "less",
+        "sha256": "09ba0d3d931c5be96296013d8c957afb899252be284dbcdc0b771e6e0e01988c"
+      },
+      "elapsed_ms": 260.167,
+      "covered_count": 13043
     },
     "vector_f32": {
       "device": "vector_f32",
       "label": "向量化计算路径 (分块逐像素，f32，GPU top-left 填充)",
       "kind": "cpu-simd",
       "precision": "f32",
-      "elapsed_ms": 196.252,
-      "covered_count": 1459
+      "profile": {
+        "id": "strict_f32",
+        "label": "f32 严格 IEEE · 浮点纹理 · 浮点写回",
+        "diagnostic_only": false,
+        "sources": {
+          "precision": "运算精度：f64=IEEE 双精度参考；f32=每步按 binary32 舍入（GPU 单精度形态）。",
+          "fast_math": "快速数学：启用后用指数近似倒数 + 牛顿迭代、重结合点积，属显式声明的近似通路。",
+          "texture_format": "纹理存储：float32_bilinear=浮点双线性；rgba8_linear=采样后量化到 8 位线性格点(1/255)。",
+          "blend_capability": "混合/写回能力：float_blend=线性浮点写回；fixed8_blend=写回时量化到 8 位线性格点(1/255)。",
+          "depth_convention": "深度约定：ndc_minus1_1=OpenGL 风格 [-1,1(NDC)]；ndc_0_1=D3D/Vulkan 风格 [0,1]（诊断用，刻意引入约定差异）。",
+          "depth_test": "深度测试：less=严格小于；less_equal=近重合表面后写覆盖。"
+        },
+        "precision": "f32",
+        "fast_math": false,
+        "texture_format": "float32_bilinear",
+        "blend_capability": "float_blend",
+        "depth_convention": "ndc_minus1_1",
+        "depth_test": "less",
+        "sha256": "229f81aa85742908c64b75c99fd7118f4ec8db317205681191e3735861312dcf"
+      },
+      "elapsed_ms": 1867.319,
+      "covered_count": 13043
     }
   },
   "comparisons": [
     {
       "reference": "cpu_ref",
       "test": "vector_f32",
+      "chain": [
+        "cpu_ref",
+        "vector_f32"
+      ],
+      "rules_version": "acceptance-2026.11-v2",
       "verdict": {
-        "class": "precision_only",
-        "title": "仅数值精度偏差",
-        "description": "两路径覆盖与对象标识完全一致，差异处于 f32/f64 舍入可解释范围内，属正常数值精度偏差。",
+        "class": "pass",
+        "title": "通过验收",
+        "description": "覆盖、对象标识、深度、最终颜色、线性 HDR 与有限性均满足当前规则版本的分项要求。",
         "reasons": [],
-        "pass": true
+        "pass": true,
+        "primary_class": null
+      },
+      "acceptance": {
+        "rules_version": "acceptance-2026.11-v2",
+        "rules_changelog": {
+          "acceptance-2026.11-v1": "初版逐像素比较：仅统计模型有效区域；覆盖/对象标识不一致记为结构差异；sRGB 绝对误差 0.5/255、深度硬限 1e-4。",
+          "acceptance-2026.11-v2": "按操作与有效像素制定验收：拆出 coverage/object_id/depth/final_color_inherited/final_color_primary/linear_hdr/finite 七条规则；显式通道交换探测与深度约定探测；非有限值独立失败类；允许偏差按像素类别(内部/边缘)分别给出。"
+        },
+        "rules": {
+          "coverage": {
+            "effective_pixels": "模型并集 (ref_cov 或 test_cov)",
+            "allowed_disagreement": 0,
+            "failure_class": "coverage_struct",
+            "provenance": "覆盖归属无数值容差；缺失/新增一个模型像素即结构差异，不得被颜色阈值吸收。"
+          },
+          "object_id": {
+            "effective_pixels": "两路径共同覆盖像素",
+            "allowed_mismatch": 0,
+            "failure_class": "object_id",
+            "provenance": "对象标识不一致代表几何归属错误，与浮点误差无关。"
+          },
+          "depth": {
+            "effective_pixels": "共同覆盖且深度有限",
+            "allowed_abs_internal": 0.0001,
+            "allowed_abs_edge": 0.0001,
+            "failure_class": "depth_convention",
+            "provenance": "NDC 深度差超过 1e-4 视为深度约定/对应错误；f32 深度舍入典型 1e-6~1e-7，远低于该硬限。"
+          },
+          "final_color_inherited": {
+            "effective_pixels": "共同覆盖、有限、且在上一设备中已被同一对象覆盖",
+            "allowed_abs_internal": 0.00196078431372549,
+            "allowed_abs_edge": 0.00392156862745098,
+            "allowed_rel": 0.02,
+            "failure_class": "precision_exceeded",
+            "provenance": "输入颜色已由上游设备确定，只允许采样/写回引入的偏差；内部=半个量化步长，边缘带放宽到一步长。"
+          },
+          "final_color_primary": {
+            "effective_pixels": "上一设备未覆盖但本设备覆盖(差异被本次引入)的共同覆盖像素",
+            "allowed_abs_internal": 0.00196078431372549,
+            "allowed_abs_edge": 0.00392156862745098,
+            "allowed_rel": 0.02,
+            "failure_class": "precision_exceeded",
+            "provenance": "差异由本次设备的采样/颜色路径首次引入，按同口径判定。"
+          },
+          "blend_write_quantized": {
+            "effective_pixels": "共同覆盖、对象一致、被测设备声明 fixed8_blend",
+            "allowed_abs_internal": 0.01568627450980392,
+            "allowed_abs_edge": 0.01568627450980392,
+            "allowed_rel": 0.05,
+            "failure_class": "blend_quantization_exceeded",
+            "provenance": "8 位线性写回在强高光下会被映射放大；允许最多约 4 个 sRGB 量化步长，超过则说明写回量化已产生可见偏差。"
+          },
+          "linear_hdr": {
+            "effective_pixels": "共同覆盖、对象标识一致且有限",
+            "allowed_rel": 0.02,
+            "failure_class": "precision_exceeded",
+            "provenance": "线性 HDR 相对误差用于定位色调映射之前的颜色路径偏差；Reinhard 会压缩差异，故需在映射前检查。"
+          },
+          "finite": {
+            "effective_pixels": "反照率/颜色/深度的所有输出",
+            "allowed_nonfinite": 0,
+            "failure_class": "non_finite",
+            "provenance": "NaN/Inf 独立失败类；任何全局阈值都不得将其吞掉。"
+          }
+        },
+        "channel_swap_probe": {
+          "triggered": false,
+          "identity_mean_abs": 1.520209496370928e-08,
+          "best_permutation": [
+            0,
+            2,
+            1
+          ],
+          "best_permutation_mean_abs": 0.06492627655222304,
+          "reason": "原始误差低于嫌疑阈值，不构成通道交换。"
+        },
+        "depth_convention_probe": {
+          "triggered": false,
+          "mean_abs": 3.7767310087500895e-08,
+          "sign_consistency": 0.8181399984666105,
+          "reason": "深度差不足以判定约定不一致。"
+        },
+        "failures": [],
+        "pass": true,
+        "verdict": {
+          "class": "pass",
+          "title": "通过验收",
+          "description": "覆盖、对象标识、深度、最终颜色、线性 HDR 与有限性均满足当前规则版本的分项要求。",
+          "reasons": [],
+          "pass": true,
+          "primary_class": null
+        },
+        "decision_basis": "规则版本 acceptance-2026.11-v2；按操作/有效像素判定，未使用“全局宽松阈值直到全绿”策略。"
+      },
+      "attribution": {
+        "stages": {
+          "non_finite": {
+            "count": 0,
+            "edge_count": 0,
+            "interior_count": 0,
+            "provenance": "输出含 NaN/Inf，直接失败；任何阈值都不适用。",
+            "samples": []
+          },
+          "coverage": {
+            "count": 0,
+            "edge_count": 0,
+            "interior_count": 0,
+            "provenance": "覆盖状态不同：像素归属本身不一致，先于任何数值比较。",
+            "samples": []
+          },
+          "object_id": {
+            "count": 0,
+            "edge_count": 0,
+            "interior_count": 0,
+            "provenance": "同一像素被不同对象占据：几何/深度测试差异。",
+            "samples": []
+          },
+          "depth": {
+            "count": 0,
+            "edge_count": 0,
+            "interior_count": 0,
+            "provenance": "深度差超过硬限：深度约定或插值错误。",
+            "samples": []
+          },
+          "texture_sampling": {
+            "count": 0,
+            "edge_count": 0,
+            "interior_count": 0,
+            "provenance": "反照率(albedo)不同：纹理格式/双线性采样差异起始于此。",
+            "samples": []
+          },
+          "shading": {
+            "count": 0,
+            "edge_count": 0,
+            "interior_count": 0,
+            "provenance": "反照率一致但线性 HDR 不同：光照/法线/快速数学差异。",
+            "samples": []
+          },
+          "blend_write": {
+            "count": 0,
+            "edge_count": 0,
+            "interior_count": 0,
+            "provenance": "反照率一致、被测档声明定长 8 位写回：差异始于写回量化。",
+            "samples": []
+          },
+          "color_mapping": {
+            "count": 0,
+            "edge_count": 0,
+            "interior_count": 0,
+            "provenance": "线性 HDR 一致但 sRGB 不同：色调映射/OETF 差异。",
+            "samples": []
+          }
+        },
+        "first_diverging_stage": null,
+        "contributing_pixels": 0,
+        "repro_window": {
+          "x0": 0,
+          "y0": 0,
+          "x1": 0,
+          "y1": 0
+        },
+        "repro_command": {
+          "trace_pixel": [
+            0,
+            0
+          ],
+          "profiles": {
+            "cpu_ref": "reference_f64",
+            "vector_f32": "strict_f32"
+          },
+          "cli": "python -m backend.cli --scene sliver --width 192 --profile cpu_ref=reference_f64 --profile vector_f32=strict_f32 --trace 0,0 --out reports/repro",
+          "bbox": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "scene": "sliver",
+          "width": 192
+        },
+        "propagation": "覆盖/深度差异会沿光栅化传播为相邻像素的颜色差异；归因按管线顺序取首个差异阶段，颜色映射只作为末端结果。",
+        "channel_swap_probe": {
+          "triggered": false,
+          "identity_mean_abs": 1.520209496370928e-08,
+          "best_permutation": [
+            0,
+            2,
+            1
+          ],
+          "best_permutation_mean_abs": 0.06492627655222304,
+          "reason": "原始误差低于嫌疑阈值，不构成通道交换。"
+        },
+        "depth_convention_probe": {
+          "triggered": false,
+          "mean_abs": 3.7767310087500895e-08,
+          "sign_consistency": 0.8181399984666105,
+          "reason": "深度差不足以判定约定不一致。"
+        },
+        "samples": []
       },
       "stats": {
         "edge": {
           "srgb_abs": {
-            "sum": 3.741900376319496e-05,
-            "max": 3.557811366072805e-07,
-            "count": 4290,
-            "mean": 8.722378499579245e-09,
-            "p99": 2.988614455912142e-08,
-            "rmse": 1.3122156999127566e-08
+            "sum": 0.00020466085258058486,
+            "max": 6.58988517254766e-07,
+            "count": 19452,
+            "mean": 1.0521326988514541e-08,
+            "p99": 6.982762723595215e-08,
+            "rmse": 2.600849699719437e-08
           },
           "srgb_rel": {
-            "sum": 7.052690818990124e-05,
-            "max": 8.840163812015609e-07,
-            "count": 4290,
-            "mean": 1.6439838738904716e-08,
-            "p99": 6.270890778906256e-08,
-            "rmse": 2.76481135632765e-08
+            "sum": 0.00039564238841251356,
+            "max": 1.6464648924809834e-06,
+            "count": 19452,
+            "mean": 2.0339419515346163e-08,
+            "p99": 1.0689200793210082e-07,
+            "rmse": 6.076881599414298e-08
           },
           "linear_abs": {
-            "sum": 7.926281756390208e-05,
-            "max": 3.354649801556864e-07,
-            "count": 4290,
-            "mean": 1.8476181250326824e-08,
-            "p99": 7.368381005345981e-08,
-            "rmse": 2.6222892324118634e-08
+            "sum": 0.00042747108222110364,
+            "max": 6.149314787651239e-07,
+            "count": 19452,
+            "mean": 2.197568796119184e-08,
+            "p99": 1.8667467760469236e-07,
+            "rmse": 4.403613880079913e-08
           },
           "depth_abs": {
-            "sum": 5.606775386102214e-05,
-            "max": 1.9345367152645565e-07,
-            "count": 1430,
-            "mean": 3.9208219483232266e-08,
+            "sum": 0.0002521402948909568,
+            "max": 1.9345367163747795e-07,
+            "count": 6484,
+            "mean": 3.8886535300887845e-08,
             "p99": 1.3384902675106503e-07,
-            "rmse": 5.12448854552859e-08
+            "rmse": 5.065025029262361e-08
           }
         },
         "interior": {
           "srgb_abs": {
-            "sum": 8.010565140659232e-07,
-            "max": 2.8742983548823986e-08,
-            "count": 87,
-            "mean": 9.207546138688772e-09,
-            "p99": 2.8742983548823986e-08,
-            "rmse": 1.1297471139803454e-08
+            "sum": 0.0001645881476062816,
+            "max": 4.528519392810182e-08,
+            "count": 19677,
+            "mean": 8.364493957731443e-09,
+            "p99": 2.7178042372177913e-08,
+            "rmse": 1.0465071272399039e-08
           },
           "srgb_rel": {
-            "sum": 1.4779621808179946e-06,
-            "max": 6.555529127023692e-08,
-            "count": 87,
-            "mean": 1.6988071043884994e-08,
-            "p99": 6.555529127023692e-08,
-            "rmse": 2.1187682707146676e-08
+            "sum": 0.0003071585401614608,
+            "max": 1.054053277754399e-07,
+            "count": 19677,
+            "mean": 1.561002897603602e-08,
+            "p99": 5.713367567112008e-08,
+            "rmse": 1.9932265399208254e-08
           },
           "linear_abs": {
-            "sum": 1.7452009463403417e-06,
-            "max": 6.546760389358752e-08,
-            "count": 87,
-            "mean": 2.005978099241772e-08,
-            "p99": 6.546760389358752e-08,
-            "rmse": 2.563393363091504e-08
+            "sum": 0.0003518387526429967,
+            "max": 9.769161901651557e-08,
+            "count": 19677,
+            "mean": 1.7880711116684285e-08,
+            "p99": 6.782135164584702e-08,
+            "rmse": 2.353974783762946e-08
           },
           "depth_abs": {
-            "sum": 1.08438625578966e-06,
-            "max": 1.3384902675106503e-07,
-            "count": 29,
-            "mean": 3.7392629509988274e-08,
+            "sum": 0.00024045873058031741,
+            "max": 1.3384902697310963e-07,
+            "count": 6559,
+            "mean": 3.6660882844994267e-08,
             "p99": 1.3384902675106503e-07,
-            "rmse": 4.9860619234778203e-08
+            "rmse": 4.914563385074338e-08
           }
         },
         "all_srgb_abs": {
-          "sum": 3.822006027726088e-05,
-          "max": 3.557811366072805e-07,
-          "count": 4377,
-          "mean": 8.732021996175663e-09,
-          "p99": 2.974926727183913e-08,
-          "rmse": 1.3088366534539304e-08
+          "sum": 0.00036924900018686646,
+          "max": 6.58988517254766e-07,
+          "count": 39129,
+          "mean": 9.436709350785006e-09,
+          "p99": 3.347439092582505e-08,
+          "rmse": 1.9782564281615372e-08
         },
         "all_srgb_rel": {
-          "sum": 7.200487037071925e-05,
-          "max": 8.840163812015609e-07,
-          "count": 4377,
-          "mean": 1.6450735748393705e-08,
-          "p99": 6.270890778906256e-08,
-          "rmse": 2.7534471156376322e-08
+          "sum": 0.0007028009285739768,
+          "max": 1.6464648924809834e-06,
+          "count": 39129,
+          "mean": 1.796112674931577e-08,
+          "p99": 6.931220881285138e-08,
+          "rmse": 4.5117591204121506e-08
         },
         "all_linear_abs": {
-          "sum": 8.100801851024242e-05,
-          "max": 3.354649801556864e-07,
-          "count": 4377,
-          "mean": 1.850765787302774e-08,
-          "p99": 7.344865726732763e-08,
-          "rmse": 2.6211314718038842e-08
+          "sum": 0.0007793098348641003,
+          "max": 6.149314787651239e-07,
+          "count": 39129,
+          "mean": 1.9916426048815466e-08,
+          "p99": 8.088938607819784e-08,
+          "rmse": 3.525150246024435e-08
         },
         "all_depth_abs": {
-          "sum": 5.71521401168118e-05,
-          "max": 1.9345367152645565e-07,
-          "count": 1459,
-          "mean": 3.917213167704715e-08,
+          "sum": 0.0004925990254712742,
+          "max": 1.9345367163747795e-07,
+          "count": 13043,
+          "mean": 3.7767310087500895e-08,
           "p99": 1.3384902675106503e-07,
-          "rmse": 5.121773534059776e-08
+          "rmse": 4.9899287375179325e-08
         },
-        "pixels_total": 4096,
-        "background_pixels": 2637,
-        "model_union_pixels": 1459,
-        "coverage_both": 1459,
+        "pixels_total": 36864,
+        "background_pixels": 23821,
+        "model_union_pixels": 13043,
+        "coverage_both": 13043,
         "coverage_ref_only": 0,
         "coverage_test_only": 0,
-        "edge_band_pixels": 1430,
-        "interior_pixels": 29,
+        "edge_band_pixels": 6484,
+        "interior_pixels": 6559,
         "nonfinite": {
           "count": 0,
           "samples": []
@@ -243,6 +648,80 @@
         "depth_abs_hard": 0.0001,
         "depth_abs_typical": 1e-06,
         "coverage_tolerance": 0,
+        "rules_version": "acceptance-2026.11-v2",
+        "rules_changelog": {
+          "acceptance-2026.11-v1": "初版逐像素比较：仅统计模型有效区域；覆盖/对象标识不一致记为结构差异；sRGB 绝对误差 0.5/255、深度硬限 1e-4。",
+          "acceptance-2026.11-v2": "按操作与有效像素制定验收：拆出 coverage/object_id/depth/final_color_inherited/final_color_primary/linear_hdr/finite 七条规则；显式通道交换探测与深度约定探测；非有限值独立失败类；允许偏差按像素类别(内部/边缘)分别给出。"
+        },
+        "operations": {
+          "coverage": {
+            "effective_pixels": "模型并集 (ref_cov 或 test_cov)",
+            "allowed_disagreement": 0,
+            "failure_class": "coverage_struct",
+            "provenance": "覆盖归属无数值容差；缺失/新增一个模型像素即结构差异，不得被颜色阈值吸收。"
+          },
+          "object_id": {
+            "effective_pixels": "两路径共同覆盖像素",
+            "allowed_mismatch": 0,
+            "failure_class": "object_id",
+            "provenance": "对象标识不一致代表几何归属错误，与浮点误差无关。"
+          },
+          "depth": {
+            "effective_pixels": "共同覆盖且深度有限",
+            "allowed_abs_internal": 0.0001,
+            "allowed_abs_edge": 0.0001,
+            "failure_class": "depth_convention",
+            "provenance": "NDC 深度差超过 1e-4 视为深度约定/对应错误；f32 深度舍入典型 1e-6~1e-7，远低于该硬限。"
+          },
+          "final_color_inherited": {
+            "effective_pixels": "共同覆盖、有限、且在上一设备中已被同一对象覆盖",
+            "allowed_abs_internal": 0.00196078431372549,
+            "allowed_abs_edge": 0.00392156862745098,
+            "allowed_rel": 0.02,
+            "failure_class": "precision_exceeded",
+            "provenance": "输入颜色已由上游设备确定，只允许采样/写回引入的偏差；内部=半个量化步长，边缘带放宽到一步长。"
+          },
+          "final_color_primary": {
+            "effective_pixels": "上一设备未覆盖但本设备覆盖(差异被本次引入)的共同覆盖像素",
+            "allowed_abs_internal": 0.00196078431372549,
+            "allowed_abs_edge": 0.00392156862745098,
+            "allowed_rel": 0.02,
+            "failure_class": "precision_exceeded",
+            "provenance": "差异由本次设备的采样/颜色路径首次引入，按同口径判定。"
+          },
+          "blend_write_quantized": {
+            "effective_pixels": "共同覆盖、对象一致、被测设备声明 fixed8_blend",
+            "allowed_abs_internal": 0.01568627450980392,
+            "allowed_abs_edge": 0.01568627450980392,
+            "allowed_rel": 0.05,
+            "failure_class": "blend_quantization_exceeded",
+            "provenance": "8 位线性写回在强高光下会被映射放大；允许最多约 4 个 sRGB 量化步长，超过则说明写回量化已产生可见偏差。"
+          },
+          "linear_hdr": {
+            "effective_pixels": "共同覆盖、对象标识一致且有限",
+            "allowed_rel": 0.02,
+            "failure_class": "precision_exceeded",
+            "provenance": "线性 HDR 相对误差用于定位色调映射之前的颜色路径偏差；Reinhard 会压缩差异，故需在映射前检查。"
+          },
+          "finite": {
+            "effective_pixels": "反照率/颜色/深度的所有输出",
+            "allowed_nonfinite": 0,
+            "failure_class": "non_finite",
+            "provenance": "NaN/Inf 独立失败类；任何全局阈值都不得将其吞掉。"
+          }
+        },
+        "channel_swap": {
+          "trigger_abs": 0.00784313725490196,
+          "explained_abs": 0.000980392156862745,
+          "min_improvement_factor": 8.0,
+          "failure_class": "channel_swap",
+          "provenance": "若交换通道后误差降到 0.25/255 以下且至少改善 8 倍，而原始误差已超过 2/255，则判为通道交换而非数值噪声。"
+        },
+        "depth_convention": {
+          "suspicion_abs": 0.001,
+          "failure_class": "depth_convention",
+          "provenance": "深度差普遍超过 1e-3 且与几何无关地同向，判为深度约定不一致。"
+        },
         "provenance": {
           "srgb_abs_max": "0.5/255：8 位 sRGB 半个量化步长，f32 正确舍入不应超过。",
           "srgb_abs_p99": "0.25/255：99 分位收紧到四分之一步长，防止个别高光像素掩盖系统性偏差。",
@@ -253,338 +732,464 @@
       }
     }
   ],
+  "unverified": [
+    {
+      "device": "cpu_ref",
+      "profile": "strict_f32",
+      "supported_by_device": true,
+      "missing_fields": [],
+      "reason": "本次未执行此组合"
+    },
+    {
+      "device": "cpu_ref",
+      "profile": "fast_math_f32",
+      "supported_by_device": true,
+      "missing_fields": [],
+      "reason": "本次未执行此组合"
+    },
+    {
+      "device": "cpu_ref",
+      "profile": "rgba8_texture_f32",
+      "supported_by_device": true,
+      "missing_fields": [],
+      "reason": "本次未执行此组合"
+    },
+    {
+      "device": "cpu_ref",
+      "profile": "fixed8_blend_f32",
+      "supported_by_device": true,
+      "missing_fields": [],
+      "reason": "本次未执行此组合"
+    },
+    {
+      "device": "cpu_ref",
+      "profile": "degraded_rgba8_fixed8_f32",
+      "supported_by_device": true,
+      "missing_fields": [],
+      "reason": "本次未执行此组合"
+    },
+    {
+      "device": "vector_f32",
+      "profile": "reference_f64",
+      "supported_by_device": false,
+      "missing_fields": [
+        "precision"
+      ],
+      "reason": "设备未声明该能力，未验证"
+    },
+    {
+      "device": "vector_f32",
+      "profile": "fast_math_f32",
+      "supported_by_device": true,
+      "missing_fields": [],
+      "reason": "本次未执行此组合"
+    },
+    {
+      "device": "vector_f32",
+      "profile": "rgba8_texture_f32",
+      "supported_by_device": true,
+      "missing_fields": [],
+      "reason": "本次未执行此组合"
+    },
+    {
+      "device": "vector_f32",
+      "profile": "fixed8_blend_f32",
+      "supported_by_device": true,
+      "missing_fields": [],
+      "reason": "本次未执行此组合"
+    },
+    {
+      "device": "vector_f32",
+      "profile": "degraded_rgba8_fixed8_f32",
+      "supported_by_device": true,
+      "missing_fields": [],
+      "reason": "本次未执行此组合"
+    },
+    {
+      "device": "gpu_cuda",
+      "profile": "reference_f64",
+      "supported_by_device": false,
+      "missing_fields": [
+        "precision"
+      ],
+      "reason": "设备不可用/本次未选择"
+    },
+    {
+      "device": "gpu_cuda",
+      "profile": "strict_f32",
+      "supported_by_device": true,
+      "missing_fields": [],
+      "reason": "设备不可用/本次未选择"
+    },
+    {
+      "device": "gpu_cuda",
+      "profile": "fast_math_f32",
+      "supported_by_device": true,
+      "missing_fields": [],
+      "reason": "设备不可用/本次未选择"
+    },
+    {
+      "device": "gpu_cuda",
+      "profile": "rgba8_texture_f32",
+      "supported_by_device": false,
+      "missing_fields": [
+        "texture_format"
+      ],
+      "reason": "设备不可用/本次未选择"
+    },
+    {
+      "device": "gpu_cuda",
+      "profile": "fixed8_blend_f32",
+      "supported_by_device": false,
+      "missing_fields": [
+        "blend_capability"
+      ],
+      "reason": "设备不可用/本次未选择"
+    },
+    {
+      "device": "gpu_cuda",
+      "profile": "degraded_rgba8_fixed8_f32",
+      "supported_by_device": false,
+      "missing_fields": [
+        "texture_format",
+        "blend_capability"
+      ],
+      "reason": "设备不可用/本次未选择"
+    }
+  ],
   "pixel_trace": {
     "pixel": [
-      32,
-      32
+      96,
+      96
     ],
-    "index": 2080,
+    "index": 18528,
     "paths": {
       "cpu_ref": {
+        "profile_id": "reference_f64",
         "trace": [
           {
             "triangle": 0,
             "obj_id": 1,
             "weights": [
-              204.5226337051761,
-              26.721659893991415,
-              -24.721546878700494
+              1852.7043814383305,
+              80.16497968197405,
+              -74.16464063610148
             ],
-            "area": 206.52274672046704,
+            "area": 1858.7047204842033,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 1,
             "obj_id": 2,
             "weights": [
-              205.10171139835427,
-              31.340472391593607,
-              -29.919437069481006
+              1854.4416145178636,
+              94.02141717478025,
+              -89.75831120844302
             ],
-            "area": 206.5227467204669,
+            "area": 1858.704720484202,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 2,
             "obj_id": 3,
             "weights": [
-              205.76337449920078,
-              34.137890551778355,
-              -33.37851833051207
+              1856.4266038204055,
+              102.41367165533484,
+              -100.13555499153622
             ],
-            "area": 206.52274672046724,
+            "area": 1858.7047204842056,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 3,
             "obj_id": 4,
             "weights": [
-              206.46916955334152,
-              34.95133859927728,
-              -34.897761432151356
+              1858.543988982829,
+              104.85401579783138,
+              -104.69328429645407
             ],
-            "area": 206.52274672046724,
+            "area": 1858.7047204842074,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 4,
             "obj_id": 1,
             "weights": [
-              207.17807831769042,
-              33.73354189033262,
-              -34.38887348755558
+              1860.6707152758745,
+              101.2006256709974,
+              -103.16662046266673
             ],
-            "area": 206.52274672046747,
+            "area": 1858.7047204842056,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 5,
             "obj_id": 2,
             "weights": [
-              207.84890159164127,
-              30.55527434315775,
-              -31.881429214332215
+              1862.6831850977253,
+              91.66582302947245,
+              -95.64428764299664
             ],
-            "area": 206.52274672046667,
+            "area": 1858.704720484202,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 6,
             "obj_id": 3,
             "weights": [
-              208.44265356485715,
-              25.60124531506157,
-              -27.52115215945193
+              1864.4644410173712,
+              76.80373594518471,
+              -82.56345647835579
             ],
-            "area": 206.5227467204668,
+            "area": 1858.7047204842,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 7,
             "obj_id": 4,
             "weights": [
-              208.9248275308548,
-              19.15936496599454,
-              -21.561445776382133
+              1865.9109629153684,
+              57.47809489798328,
+              -64.6843373291464
             ],
-            "area": 206.52274672046713,
+            "area": 1858.7047204842052,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 8,
             "obj_id": 1,
             "weights": [
-              209.2674012913606,
-              11.604011966561984,
-              -14.348666537455545
+              1866.9386841968844,
+              34.812035899685725,
+              -43.045999612366636
             ],
-            "area": 206.522746720467,
+            "area": 1858.7047204842038,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 9,
             "obj_id": 2,
             "weights": [
-              209.45046570461915,
-              3.3742759705000935,
-              -6.301994954652802
+              1867.4878774366557,
+              10.12282791150028,
+              -18.905984863958402
             ],
-            "area": 206.52274672046633,
+            "area": 1858.7047204841965,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 10,
             "obj_id": 3,
             "weights": [
-              209.46338173234506,
-              -5.051560679973136,
-              2.1109256680947546
+              1867.5266255198349,
+              -15.154682039919862,
+              6.332777004284267
             ],
-            "area": 206.52274672046656,
+            "area": 1858.7047204842002,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 11,
             "obj_id": 4,
             "weights": [
-              209.30539874195495,
-              -13.183818985402354,
-              10.401166963915216
+              1867.0526765486718,
+              -39.5514569562074,
+              31.203500891745655
             ],
-            "area": 206.52274672046792,
+            "area": 1858.704720484211,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 12,
             "obj_id": 1,
             "weights": [
-              208.98569813060206,
-              -20.549881652632052,
-              18.086930242496592
+              1866.0935747146043,
+              -61.64964495789627,
+              54.26079072748977
             ],
-            "area": 206.52274672046656,
+            "area": 1858.7047204841988,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 13,
             "obj_id": 2,
             "weights": [
-              208.52285973575655,
-              -26.721659893991415,
-              24.7215468787005
+              1864.7050595300634,
+              -80.16497968197427,
+              74.1646406361015
             ],
-            "area": 206.52274672046562,
+            "area": 1858.7047204841906,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 14,
             "obj_id": 3,
             "weights": [
-              207.94378204258044,
-              -31.34047239159372,
-              29.919437069481006
+              1862.967826450546,
+              -94.02141717478116,
+              89.75831120844302
             ],
-            "area": 206.5227467204678,
+            "area": 1858.7047204842074,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 15,
             "obj_id": 4,
             "weights": [
-              207.28211894173407,
-              -34.13789055177858,
-              33.378518330512065
+              1860.982837148011,
+              -102.41367165533666,
+              100.1355549915362
             ],
-            "area": 206.5227467204678,
+            "area": 1858.704720484211,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 16,
             "obj_id": 1,
             "weights": [
-              206.57632388759453,
-              -34.95133859927705,
-              34.89776143215136
+              1858.8654519855972,
+              -104.85401579783138,
+              104.6932842964541
             ],
-            "area": 206.52274672046883,
+            "area": 1858.7047204842202,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 17,
             "obj_id": 2,
             "weights": [
-              205.86741512324375,
-              -33.733541890332845,
-              34.38887348755558
+              1856.7387256925324,
+              -101.2006256709974,
+              103.16662046266674
             ],
-            "area": 206.52274672046678,
+            "area": 1858.704720484202,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 18,
             "obj_id": 3,
             "weights": [
-              205.19659184929432,
-              -30.55527434315775,
-              31.881429214332222
+              1854.7262558706968,
+              -91.66582302947245,
+              95.64428764299667
             ],
-            "area": 206.52274672046894,
+            "area": 1858.7047204842202,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 19,
             "obj_id": 4,
             "weights": [
-              204.60283987607852,
-              -25.60124531506156,
-              27.521152159451944
+              1852.94499995105,
+              -76.8037359451846,
+              82.56345647835583
             ],
-            "area": 206.5227467204689,
+            "area": 1858.704720484221,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 20,
             "obj_id": 1,
             "weights": [
-              204.1206659100792,
-              -19.159364965994484,
-              21.561445776382126
+              1851.4984780530385,
+              -57.47809489798328,
+              64.68433732914637
             ],
-            "area": 206.52274672046678,
+            "area": 1858.7047204842015,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 21,
             "obj_id": 2,
             "weights": [
-              203.77809214957284,
-              -11.60401196656187,
-              14.348666537455543
+              1850.4707567715186,
+              -34.812035899685725,
+              43.04599961236663
             ],
-            "area": 206.52274672046656,
+            "area": 1858.7047204842002,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 22,
             "obj_id": 3,
             "weights": [
-              203.59502773631783,
-              -3.374275970499866,
-              6.301994954652834
+              1849.9215635317807,
+              -10.12282791150028,
+              18.90598486395851
             ],
-            "area": 206.52274672047065,
+            "area": 1858.7047204842384,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 23,
             "obj_id": 4,
             "weights": [
-              203.58211170859045,
-              5.051560679973136,
-              -2.110925668094737
+              1849.8828154485848,
+              15.154682039919862,
+              -6.33277700428421
             ],
-            "area": 206.52274672046883,
+            "area": 1858.7047204842202,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 24,
             "obj_id": 1,
             "weights": [
-              203.74009469897948,
-              13.183818985402354,
-              -10.401166963915244
+              1850.356764419736,
+              39.5514569562074,
+              -31.203500891745733
             ],
-            "area": 206.52274672046656,
+            "area": 1858.7047204841965,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 25,
             "obj_id": 2,
             "weights": [
-              204.05979531033108,
-              20.54988165263211,
-              -18.08693024249659
+              1851.315866253792,
+              61.64964495789627,
+              -54.26079072748976
             ],
-            "area": 206.52274672046656,
+            "area": 1858.7047204841983,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 26,
             "obj_id": 5,
             "weights": [
-              -24.90319543086446,
-              -114.06904755831238,
-              89.23633152467573
+              -227.0258151526278,
+              -1545.1945012225551,
+              1324.597113194668
             ],
-            "area": -49.73591146450053,
+            "area": -447.6232031805048,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           }
         ],
         "final_srgb": [
@@ -597,335 +1202,341 @@
           0.0,
           0.0
         ],
-        "depth": Infinity,
+        "final_albedo": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "depth": "Infinity",
         "obj_id": 0,
         "covered": false
       },
       "vector_f32": {
+        "profile_id": "strict_f32",
         "trace": [
           {
             "triangle": 0,
             "obj_id": 1,
             "weights": [
-              204.52264404296875,
-              26.721664428710938,
-              -24.721546173095703
+              1852.70458984375,
+              80.1650390625,
+              -74.16464233398438
             ],
-            "area": 206.52276611328125,
+            "area": 1858.7049560546875,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 1,
             "obj_id": 2,
             "weights": [
-              205.10174560546875,
-              31.3404541015625,
-              -29.919437408447266
+              1854.441650390625,
+              94.021484375,
+              -89.75831604003906
             ],
-            "area": 206.52276611328125,
+            "area": 1858.70458984375,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 2,
             "obj_id": 3,
             "weights": [
-              205.7634735107422,
-              34.137939453125,
-              -33.378517150878906
+              1856.4266357421875,
+              102.4140625,
+              -100.13555145263672
             ],
-            "area": 206.52288818359375,
+            "area": 1858.7041015625,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 3,
             "obj_id": 4,
             "weights": [
-              206.46925354003906,
-              34.9512939453125,
-              -34.897762298583984
+              1858.5439453125,
+              104.8544921875,
+              -104.69328308105469
             ],
-            "area": 206.5228271484375,
+            "area": 1858.705078125,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 4,
             "obj_id": 1,
             "weights": [
-              207.17816162109375,
-              33.733642578125,
-              -34.38887405395508
+              1860.671142578125,
+              101.2001953125,
+              -103.16661834716797
             ],
-            "area": 206.52276611328125,
+            "area": 1858.705078125,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 5,
             "obj_id": 2,
             "weights": [
-              207.84906005859375,
-              30.55523681640625,
-              -31.88142967224121
+              1862.681396484375,
+              91.666015625,
+              -95.644287109375
             ],
-            "area": 206.52288818359375,
+            "area": 1858.70263671875,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 6,
             "obj_id": 3,
             "weights": [
-              208.44259643554688,
-              25.601242065429688,
-              -27.521150588989258
+              1864.4644775390625,
+              76.8037109375,
+              -82.56346130371094
             ],
-            "area": 206.52267456054688,
+            "area": 1858.7047119140625,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 7,
             "obj_id": 4,
             "weights": [
-              208.9247589111328,
-              19.15936279296875,
-              -21.561443328857422
+              1865.9111328125,
+              57.47802734375,
+              -64.68434143066406
             ],
-            "area": 206.52267456054688,
+            "area": 1858.704833984375,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 8,
             "obj_id": 1,
             "weights": [
-              209.2674102783203,
-              11.60400390625,
-              -14.348666191101074
+              1866.9384765625,
+              34.8125,
+              -43.04600143432617
             ],
-            "area": 206.52276611328125,
+            "area": 1858.70458984375,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 9,
             "obj_id": 2,
             "weights": [
-              209.45045471191406,
-              3.374267578125,
-              -6.301995277404785
+              1867.488037109375,
+              10.123046875,
+              -18.905982971191406
             ],
-            "area": 206.522705078125,
+            "area": 1858.7041015625,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 10,
             "obj_id": 3,
             "weights": [
-              209.46337890625,
-              -5.0516357421875,
-              2.1109256744384766
+              1867.526611328125,
+              -15.1552734375,
+              6.3327789306640625
             ],
-            "area": 206.5228271484375,
+            "area": 1858.7041015625,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 11,
             "obj_id": 4,
             "weights": [
-              209.305419921875,
-              -13.18377685546875,
-              10.401166915893555
+              1867.052734375,
+              -39.55126953125,
+              31.20349884033203
             ],
-            "area": 206.5228271484375,
+            "area": 1858.70458984375,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 12,
             "obj_id": 1,
             "weights": [
-              208.98568725585938,
-              -20.54986572265625,
-              18.086929321289062
+              1866.0936279296875,
+              -61.649658203125,
+              54.26079177856445
             ],
-            "area": 206.522705078125,
+            "area": 1858.704345703125,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 13,
             "obj_id": 2,
             "weights": [
-              208.5228729248047,
-              -26.721664428710938,
-              24.721546173095703
+              1864.705322265625,
+              -80.1650390625,
+              74.16464233398438
             ],
-            "area": 206.52276611328125,
+            "area": 1858.7049560546875,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 14,
             "obj_id": 3,
             "weights": [
-              207.9436798095703,
-              -31.34051513671875,
-              29.919437408447266
+              1862.966552734375,
+              -94.02099609375,
+              89.75831604003906
             ],
-            "area": 206.52264404296875,
+            "area": 1858.70361328125,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 15,
             "obj_id": 4,
             "weights": [
-              207.28213500976562,
-              -34.1378173828125,
-              33.378517150878906
+              1860.9822998046875,
+              -102.4140625,
+              100.13555145263672
             ],
-            "area": 206.5228271484375,
+            "area": 1858.7041015625,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 16,
             "obj_id": 1,
             "weights": [
-              206.57643127441406,
-              -34.9512939453125,
-              34.89775848388672
+              1858.866455078125,
+              -104.8544921875,
+              104.69328308105469
             ],
-            "area": 206.5228271484375,
+            "area": 1858.7060546875,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 17,
             "obj_id": 2,
             "weights": [
-              205.8673095703125,
-              -33.7335205078125,
-              34.38887405395508
+              1856.7388916015625,
+              -101.2001953125,
+              103.16661834716797
             ],
-            "area": 206.522705078125,
+            "area": 1858.705078125,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 18,
             "obj_id": 3,
             "weights": [
-              205.19656372070312,
-              -30.5552978515625,
-              31.881427764892578
+              1854.7261962890625,
+              -91.666015625,
+              95.644287109375
             ],
-            "area": 206.522705078125,
+            "area": 1858.70458984375,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 19,
             "obj_id": 4,
             "weights": [
-              204.60287475585938,
-              -25.60124969482422,
-              27.52115249633789
+              1852.945068359375,
+              -76.8037109375,
+              82.5634536743164
             ],
-            "area": 206.52279663085938,
+            "area": 1858.704833984375,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 20,
             "obj_id": 1,
             "weights": [
-              204.1207733154297,
-              -19.15936279296875,
-              21.561445236206055
+              1851.4981689453125,
+              -57.47802734375,
+              64.68433380126953
             ],
-            "area": 206.52285766601562,
+            "area": 1858.704345703125,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 21,
             "obj_id": 2,
             "weights": [
-              203.77810668945312,
-              -11.60400390625,
-              14.348665237426758
+              1850.47265625,
+              -34.8115234375,
+              43.04600524902344
             ],
-            "area": 206.52276611328125,
+            "area": 1858.70654296875,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 22,
             "obj_id": 3,
             "weights": [
-              203.5951385498047,
-              -3.374267578125,
-              6.301996231079102
+              1849.9215087890625,
+              -10.123046875,
+              18.905982971191406
             ],
-            "area": 206.5228271484375,
+            "area": 1858.7041015625,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 23,
             "obj_id": 4,
             "weights": [
-              203.5819091796875,
-              5.051513671875,
-              -2.1109275817871094
+              1849.88330078125,
+              15.154296875,
+              -6.3327789306640625
             ],
-            "area": 206.5225830078125,
+            "area": 1858.705078125,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 24,
             "obj_id": 1,
             "weights": [
-              203.74014282226562,
-              13.18377685546875,
-              -10.401166915893555
+              1850.3560791015625,
+              39.55126953125,
+              -31.20349884033203
             ],
-            "area": 206.5228271484375,
+            "area": 1858.7041015625,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 25,
             "obj_id": 2,
             "weights": [
-              204.05982971191406,
-              20.54986572265625,
-              -18.086931228637695
+              1851.3167724609375,
+              61.649658203125,
+              -54.26078796386719
             ],
-            "area": 206.52273559570312,
+            "area": 1858.705810546875,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           },
           {
             "triangle": 26,
             "obj_id": 5,
             "weights": [
-              -24.90306854248047,
-              -114.06884765625,
-              89.236328125
+              -227.024658203125,
+              -1545.193359375,
+              1324.6015625
             ],
-            "area": -49.7353515625,
+            "area": -447.62109375,
             "inside": false,
-            "depth_before": Infinity
+            "depth_before": "Infinity"
           }
         ],
         "final_srgb": [
@@ -938,7 +1549,12 @@
           0.0,
           0.0
         ],
-        "depth": Infinity,
+        "final_albedo": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "depth": "Infinity",
         "obj_id": 0,
         "covered": false
       }

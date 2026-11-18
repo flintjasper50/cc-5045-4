@@ -1,6 +1,7 @@
 [
   {
     "scene": "sliver",
+    "rules_version": "acceptance-2026.11-v2",
     "executed": [
       "cpu_ref",
       "vector_f32"
@@ -8,13 +9,191 @@
     "skipped": [
       "gpu_cuda"
     ],
-    "gpu_can_execute": false,
-    "verdict": {
-      "class": "precision_only",
-      "title": "仅数值精度偏差",
-      "description": "两路径覆盖与对象标识完全一致，差异处于 f32/f64 舍入可解释范围内，属正常数值精度偏差。",
-      "reasons": [],
-      "pass": true
-    }
+    "unsupported": [],
+    "profiles": {
+      "cpu_ref": "reference_f64",
+      "vector_f32": "strict_f32",
+      "gpu_cuda": "strict_f32"
+    },
+    "comparisons": [
+      {
+        "reference": "cpu_ref",
+        "test": "vector_f32",
+        "verdict": {
+          "class": "pass",
+          "title": "通过验收",
+          "description": "覆盖、对象标识、深度、最终颜色、线性 HDR 与有限性均满足当前规则版本的分项要求。",
+          "reasons": [],
+          "pass": true,
+          "primary_class": null
+        },
+        "first_diverging_stage": null,
+        "repro_window": {
+          "x0": 0,
+          "y0": 0,
+          "x1": 0,
+          "y1": 0
+        },
+        "failures": []
+      }
+    ],
+    "unverified_combinations": [
+      {
+        "device": "cpu_ref",
+        "profile": "strict_f32",
+        "supported_by_device": true,
+        "missing_fields": [],
+        "reason": "本次未执行此组合"
+      },
+      {
+        "device": "cpu_ref",
+        "profile": "fast_math_f32",
+        "supported_by_device": true,
+        "missing_fields": [],
+        "reason": "本次未执行此组合"
+      },
+      {
+        "device": "cpu_ref",
+        "profile": "rgba8_texture_f32",
+        "supported_by_device": true,
+        "missing_fields": [],
+        "reason": "本次未执行此组合"
+      },
+      {
+        "device": "cpu_ref",
+        "profile": "fixed8_blend_f32",
+        "supported_by_device": true,
+        "missing_fields": [],
+        "reason": "本次未执行此组合"
+      },
+      {
+        "device": "cpu_ref",
+        "profile": "degraded_rgba8_fixed8_f32",
+        "supported_by_device": true,
+        "missing_fields": [],
+        "reason": "本次未执行此组合"
+      },
+      {
+        "device": "vector_f32",
+        "profile": "reference_f64",
+        "supported_by_device": false,
+        "missing_fields": [
+          "precision"
+        ],
+        "reason": "设备未声明该能力，未验证"
+      },
+      {
+        "device": "vector_f32",
+        "profile": "fast_math_f32",
+        "supported_by_device": true,
+        "missing_fields": [],
+        "reason": "本次未执行此组合"
+      },
+      {
+        "device": "vector_f32",
+        "profile": "rgba8_texture_f32",
+        "supported_by_device": true,
+        "missing_fields": [],
+        "reason": "本次未执行此组合"
+      },
+      {
+        "device": "vector_f32",
+        "profile": "fixed8_blend_f32",
+        "supported_by_device": true,
+        "missing_fields": [],
+        "reason": "本次未执行此组合"
+      },
+      {
+        "device": "vector_f32",
+        "profile": "degraded_rgba8_fixed8_f32",
+        "supported_by_device": true,
+        "missing_fields": [],
+        "reason": "本次未执行此组合"
+      },
+      {
+        "device": "gpu_cuda",
+        "profile": "reference_f64",
+        "supported_by_device": false,
+        "missing_fields": [
+          "precision"
+        ],
+        "reason": "设备不可用/本次未选择"
+      },
+      {
+        "device": "gpu_cuda",
+        "profile": "strict_f32",
+        "supported_by_device": true,
+        "missing_fields": [],
+        "reason": "设备不可用/本次未选择"
+      },
+      {
+        "device": "gpu_cuda",
+        "profile": "fast_math_f32",
+        "supported_by_device": true,
+        "missing_fields": [],
+        "reason": "设备不可用/本次未选择"
+      },
+      {
+        "device": "gpu_cuda",
+        "profile": "rgba8_texture_f32",
+        "supported_by_device": false,
+        "missing_fields": [
+          "texture_format"
+        ],
+        "reason": "设备不可用/本次未选择"
+      },
+      {
+        "device": "gpu_cuda",
+        "profile": "fixed8_blend_f32",
+        "supported_by_device": false,
+        "missing_fields": [
+          "blend_capability"
+        ],
+        "reason": "设备不可用/本次未选择"
+      },
+      {
+        "device": "gpu_cuda",
+        "profile": "degraded_rgba8_fixed8_f32",
+        "supported_by_device": false,
+        "missing_fields": [
+          "texture_format",
+          "blend_capability"
+        ],
+        "reason": "设备不可用/本次未选择"
+      }
+    ],
+    "attribution": [
+      {
+        "reference": "cpu_ref",
+        "test": "vector_f32",
+        "first_diverging_stage": null,
+        "repro_window": {
+          "x0": 0,
+          "y0": 0,
+          "x1": 0,
+          "y1": 0
+        },
+        "repro_command": {
+          "trace_pixel": [
+            0,
+            0
+          ],
+          "profiles": {
+            "cpu_ref": "reference_f64",
+            "vector_f32": "strict_f32"
+          },
+          "cli": "python -m backend.cli --scene sliver --width 192 --profile cpu_ref=reference_f64 --profile vector_f32=strict_f32 --trace 0,0 --out reports/repro",
+          "bbox": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "scene": "sliver",
+          "width": 192
+        },
+        "stage_counts": {}
+      }
+    ]
   }
 ]

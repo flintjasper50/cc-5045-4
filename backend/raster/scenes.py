@@ -52,13 +52,16 @@ def scene_depth_near():
     model = _model(rot_y=math.radians(18.0), rot_x=math.radians(10.0))
     mat_a = _mat((0.85, 0.85, 0.8), use_texture=True, spec_power=64.0, spec=0.3)
     mat_b = _mat((0.25, 0.55, 0.3), spec_power=16.0, spec=0.15)
-    # Two large planes separated by a tiny depth delta at far distance.
+    # Two large planes separated by a tiny depth delta at far distance.  The
+    # nearer (green) plane is smaller so the textured plane stays visible in a
+    # ring around it -- otherwise texture-format differences would be hidden.
     z0 = -14.0
     s = 1.5
     base = [(-s, -s, 0.0), (s, -s, 0.0), (s, s, 0.0), (-s, s, 0.0)]
     uvs = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
-    for k, (dz, mt, oid) in enumerate([(0.0, mat_a, 1), (0.0009, mat_b, 2)]):
-        pts = [(x, y, z0 + dz) for (x, y, _) in base]
+    for k, (dz, scale, mt, oid) in enumerate(
+            [(0.0, 1.0, mat_a, 1), (0.0009, 0.7, mat_b, 2)]):
+        pts = [(x * scale, y * scale, z0 + dz) for (x, y, _) in base]
         tris += _quad(*pts, uvs=uvs, normal=(0.0, 0.0, 1.0),
                       obj_id=oid, material=mt, model=model)
     # A small foreground cube so the frame has strong depth range.

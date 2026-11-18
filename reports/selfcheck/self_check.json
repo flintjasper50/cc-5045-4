@@ -1,0 +1,298 @@
+{
+  "rules_version": "acceptance-2026.11-v2",
+  "scene": "all",
+  "findings": [
+    {
+      "case": "normal_rounding",
+      "verdict": {
+        "class": "pass",
+        "title": "通过验收",
+        "description": "覆盖、对象标识、深度、最终颜色、线性 HDR 与有限性均满足当前规则版本的分项要求。",
+        "reasons": [],
+        "pass": true,
+        "primary_class": null
+      },
+      "first_stage": null,
+      "scene": "depth_near"
+    },
+    {
+      "case": "channel_swap",
+      "verdict": {
+        "class": "fail",
+        "title": "通道交换",
+        "description": "precision_exceeded（final_color_inherited）：791 个像素超出允许偏差。；channel_swap（channel_layout）：791 个像素超出允许偏差。",
+        "reasons": [
+          "precision_exceeded（final_color_inherited）：791 个像素超出允许偏差。",
+          "channel_swap（channel_layout）：791 个像素超出允许偏差。"
+        ],
+        "pass": false,
+        "primary_class": "channel_swap"
+      },
+      "probe": {
+        "triggered": true,
+        "identity_mean_abs": 0.19308138501162836,
+        "best_permutation": [
+          2,
+          0,
+          1
+        ],
+        "best_permutation_mean_abs": 3.799995482339632e-08,
+        "reason": "通道置换 (2, 0, 1) 将平均误差 1.931e-01 降至 3.800e-08，判为通道交换。"
+      },
+      "scene": "depth_near"
+    },
+    {
+      "case": "depth_convention",
+      "verdict": {
+        "class": "fail",
+        "title": "深度约定不一致",
+        "description": "depth_convention（depth）：791 个像素超出允许偏差。",
+        "reasons": [
+          "depth_convention（depth）：791 个像素超出允许偏差。"
+        ],
+        "pass": false,
+        "primary_class": "depth_convention"
+      },
+      "probe": {
+        "triggered": true,
+        "mean_abs": 0.006149454504245374,
+        "sign_consistency": 1.0,
+        "reason": "深度差普遍 6.149e-03 且同向比例 1.00，判为深度约定不一致。"
+      },
+      "scene": "depth_near"
+    },
+    {
+      "case": "non_finite",
+      "verdict": {
+        "class": "fail",
+        "title": "存在非有限值（NaN/Inf）",
+        "description": "non_finite（finite）：1 个像素超出允许偏差。",
+        "reasons": [
+          "non_finite（finite）：1 个像素超出允许偏差。"
+        ],
+        "pass": false,
+        "primary_class": "non_finite"
+      },
+      "scene": "depth_near"
+    },
+    {
+      "case": "normal_rounding",
+      "verdict": {
+        "class": "pass",
+        "title": "通过验收",
+        "description": "覆盖、对象标识、深度、最终颜色、线性 HDR 与有限性均满足当前规则版本的分项要求。",
+        "reasons": [],
+        "pass": true,
+        "primary_class": null
+      },
+      "first_stage": null,
+      "scene": "highlight"
+    },
+    {
+      "case": "channel_swap",
+      "verdict": {
+        "class": "fail",
+        "title": "通道交换",
+        "description": "precision_exceeded（final_color_inherited）：307 个像素超出允许偏差。；channel_swap（channel_layout）：2438 个像素超出允许偏差。",
+        "reasons": [
+          "precision_exceeded（final_color_inherited）：307 个像素超出允许偏差。",
+          "channel_swap（channel_layout）：2438 个像素超出允许偏差。"
+        ],
+        "pass": false,
+        "primary_class": "channel_swap"
+      },
+      "probe": {
+        "triggered": true,
+        "identity_mean_abs": 0.008255674662557503,
+        "best_permutation": [
+          2,
+          0,
+          1
+        ],
+        "best_permutation_mean_abs": 3.2542997001287884e-07,
+        "reason": "通道置换 (2, 0, 1) 将平均误差 8.256e-03 降至 3.254e-07，判为通道交换。"
+      },
+      "scene": "highlight"
+    },
+    {
+      "case": "depth_convention",
+      "verdict": {
+        "class": "fail",
+        "title": "深度约定不一致",
+        "description": "depth_convention（depth）：2438 个像素超出允许偏差。",
+        "reasons": [
+          "depth_convention（depth）：2438 个像素超出允许偏差。"
+        ],
+        "pass": false,
+        "primary_class": "depth_convention"
+      },
+      "probe": {
+        "triggered": true,
+        "mean_abs": 0.009876487391380957,
+        "sign_consistency": 1.0,
+        "reason": "深度差普遍 9.876e-03 且同向比例 1.00，判为深度约定不一致。"
+      },
+      "scene": "highlight"
+    },
+    {
+      "case": "non_finite",
+      "verdict": {
+        "class": "fail",
+        "title": "存在非有限值（NaN/Inf）",
+        "description": "non_finite（finite）：1 个像素超出允许偏差。",
+        "reasons": [
+          "non_finite（finite）：1 个像素超出允许偏差。"
+        ],
+        "pass": false,
+        "primary_class": "non_finite"
+      },
+      "scene": "highlight"
+    },
+    {
+      "case": "normal_rounding",
+      "verdict": {
+        "class": "pass",
+        "title": "通过验收",
+        "description": "覆盖、对象标识、深度、最终颜色、线性 HDR 与有限性均满足当前规则版本的分项要求。",
+        "reasons": [],
+        "pass": true,
+        "primary_class": null
+      },
+      "first_stage": null,
+      "scene": "sliver"
+    },
+    {
+      "case": "channel_swap",
+      "verdict": {
+        "class": "fail",
+        "title": "通道交换",
+        "description": "precision_exceeded（final_color_inherited）：3266 个像素超出允许偏差。；channel_swap（channel_layout）：3266 个像素超出允许偏差。",
+        "reasons": [
+          "precision_exceeded（final_color_inherited）：3266 个像素超出允许偏差。",
+          "channel_swap（channel_layout）：3266 个像素超出允许偏差。"
+        ],
+        "pass": false,
+        "primary_class": "channel_swap"
+      },
+      "probe": {
+        "triggered": true,
+        "identity_mean_abs": 0.1529947839070969,
+        "best_permutation": [
+          2,
+          0,
+          1
+        ],
+        "best_permutation_mean_abs": 1.536532967136725e-08,
+        "reason": "通道置换 (2, 0, 1) 将平均误差 1.530e-01 降至 1.537e-08，判为通道交换。"
+      },
+      "scene": "sliver"
+    },
+    {
+      "case": "depth_convention",
+      "verdict": {
+        "class": "fail",
+        "title": "深度约定不一致",
+        "description": "depth_convention（depth）：3266 个像素超出允许偏差。",
+        "reasons": [
+          "depth_convention（depth）：3266 个像素超出允许偏差。"
+        ],
+        "pass": false,
+        "primary_class": "depth_convention"
+      },
+      "probe": {
+        "triggered": true,
+        "mean_abs": 0.017552311137278353,
+        "sign_consistency": 1.0,
+        "reason": "深度差普遍 1.755e-02 且同向比例 1.00，判为深度约定不一致。"
+      },
+      "scene": "sliver"
+    },
+    {
+      "case": "non_finite",
+      "verdict": {
+        "class": "fail",
+        "title": "存在非有限值（NaN/Inf）",
+        "description": "non_finite（finite）：1 个像素超出允许偏差。",
+        "reasons": [
+          "non_finite（finite）：1 个像素超出允许偏差。"
+        ],
+        "pass": false,
+        "primary_class": "non_finite"
+      },
+      "scene": "sliver"
+    },
+    {
+      "case": "normal_rounding",
+      "verdict": {
+        "class": "pass",
+        "title": "通过验收",
+        "description": "覆盖、对象标识、深度、最终颜色、线性 HDR 与有限性均满足当前规则版本的分项要求。",
+        "reasons": [],
+        "pass": true,
+        "primary_class": null
+      },
+      "first_stage": null,
+      "scene": "hdr_gamut"
+    },
+    {
+      "case": "channel_swap",
+      "verdict": {
+        "class": "fail",
+        "title": "通道交换",
+        "description": "precision_exceeded（final_color_inherited）：832 个像素超出允许偏差。；channel_swap（channel_layout）：832 个像素超出允许偏差。",
+        "reasons": [
+          "precision_exceeded（final_color_inherited）：832 个像素超出允许偏差。",
+          "channel_swap（channel_layout）：832 个像素超出允许偏差。"
+        ],
+        "pass": false,
+        "primary_class": "channel_swap"
+      },
+      "probe": {
+        "triggered": true,
+        "identity_mean_abs": 0.45566044533757843,
+        "best_permutation": [
+          2,
+          0,
+          1
+        ],
+        "best_permutation_mean_abs": 4.74012185936195e-08,
+        "reason": "通道置换 (2, 0, 1) 将平均误差 4.557e-01 降至 4.740e-08，判为通道交换。"
+      },
+      "scene": "hdr_gamut"
+    },
+    {
+      "case": "depth_convention",
+      "verdict": {
+        "class": "fail",
+        "title": "深度约定不一致",
+        "description": "depth_convention（depth）：832 个像素超出允许偏差。",
+        "reasons": [
+          "depth_convention（depth）：832 个像素超出允许偏差。"
+        ],
+        "pass": false,
+        "primary_class": "depth_convention"
+      },
+      "probe": {
+        "triggered": true,
+        "mean_abs": 0.010115193834944719,
+        "sign_consistency": 1.0,
+        "reason": "深度差普遍 1.012e-02 且同向比例 1.00，判为深度约定不一致。"
+      },
+      "scene": "hdr_gamut"
+    },
+    {
+      "case": "non_finite",
+      "verdict": {
+        "class": "fail",
+        "title": "存在非有限值（NaN/Inf）",
+        "description": "non_finite（finite）：1 个像素超出允许偏差。",
+        "reasons": [
+          "non_finite（finite）：1 个像素超出允许偏差。"
+        ],
+        "pass": false,
+        "primary_class": "non_finite"
+      },
+      "scene": "hdr_gamut"
+    }
+  ]
+}

@@ -4,6 +4,8 @@ from .service import (
     available_scenes,
     reproducibility_config,
     discover_devices,
+    profile_catalog,
+    PRECISION_CONFIGS,
     MAX_RES,
     DEFAULT_RES,
 )
@@ -13,6 +15,8 @@ __all__ = [
     "available_scenes",
     "reproducibility_config",
     "discover_devices",
+    "profile_catalog",
+    "PRECISION_CONFIGS",
     "MAX_RES",
     "DEFAULT_RES",
 ]

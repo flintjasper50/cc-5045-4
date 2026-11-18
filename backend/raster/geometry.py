@@ -2,7 +2,16 @@
 
 Both compute paths call *exactly* the same scene setup, camera matrices,
 texture sampler and color transform, so any difference left after this is due
-to the rasterization arithmetic/ordering, not to mismatched configuration.
+to the rasterization arithmetic/ordering and the declared capability profile,
+not to mismatched configuration.
+
+Capability hooks (all opt-in through the render profile, default off):
+* ``fast_math``       -- exp approximation + reassociated dot, explicitly declared.
+* ``texture_format``  -- ``rgba8_linear`` quantises sampled texels to an 8-bit
+  linear lattice before shading.
+* ``blend_capability``-- ``fixed8_blend`` quantises the written linear texel.
+* ``depth_convention``-- ``ndc_0_1`` applies the D3D/Vulkan window-depth remap
+  (a *diagnostic* deviation; the reference always uses ``ndc_minus1_1``).
 """
 import math
 
@@ -73,6 +82,49 @@ def mat_vec(m, v):
 
 
 # --------------------------------------------------------------------------
+# Declared texture storage formats
+# --------------------------------------------------------------------------
+TEXTURE_FORMATS = {
+    "float32_bilinear": {
+        "label": "float32 双线性采样（无存储量化）",
+        "quantize_bits": None,
+        "provenance": "纹素以浮点保存，采样只引入 binary32 舍入。",
+    },
+    "rgba8_linear": {
+        "label": "rgba8 线性格点（1/255 量化）",
+        "quantize_bits": 255,
+        "provenance": "内存受限设备常用的 8 位线性纹理格式；采样后量化到 1/255。",
+    },
+}
+
+BLEND_CAPABILITIES = {
+    "float_blend": {
+        "label": "线性浮点写回（无量化）",
+        "quantize_bits": None,
+        "provenance": "浮点帧缓冲，写回保留完整精度。",
+    },
+    "fixed8_blend": {
+        "label": "定长 8 位线性写回（1/255 量化）",
+        "quantize_bits": 255,
+        "provenance": "无浮点混合能力时，线性颜色写回即量化到 8 位格点。",
+    },
+}
+
+
+def quantize_unit(x, levels):
+    """Round to the nearest 1/levels lattice point and clamp to [0,1]."""
+    return clamp(round(x * levels) / levels, 0.0, 1.0)
+
+
+def apply_texture_format(sampled, texture_format):
+    spec = TEXTURE_FORMATS[texture_format]
+    levels = spec["quantize_bits"]
+    if levels is None:
+        return tuple(sampled)
+    return tuple(quantize_unit(c, levels) for c in sampled)
+
+
+# --------------------------------------------------------------------------
 # Deterministic procedural texture + nearest/linear sampling (shared)
 # --------------------------------------------------------------------------
 class ProceduralTexture:
@@ -95,11 +147,23 @@ class ProceduralTexture:
         j = int(math.floor(v * s)) % s
         return self.texels[j * s + i]
 
-    def sample_linear(self, u, v):
-        """Bilinear with wrap addressing; evaluated per precision mode."""
+    def sample_linear(self, u, v, precision="f64"):
+        """Bilinear with wrap addressing, evaluated in the declared precision.
+
+        The f32 path rounds every intermediate to binary32 (as a GPU sampler
+        would); the f64 path keeps native doubles.  This is a real precision
+        difference in sampling, not a scripted offset.
+        """
+        if precision == "f32":
+            add, mul, sub = f32add, f32mul, f32sub
+            u, v = f32(u), f32(v)
+        else:
+            add = lambda a, b: a + b
+            mul = lambda a, b: a * b
+            sub = lambda a, b: a - b
         s = self.size
-        fx = u * s - 0.5
-        fy = v * s - 0.5
+        fx = sub(mul(u, f32(s)), 0.5)
+        fy = sub(mul(v, f32(s)), 0.5)
         i0 = int(math.floor(fx))
         j0 = int(math.floor(fy))
         tx, ty = fx - i0, fy - j0
@@ -112,9 +176,11 @@ class ProceduralTexture:
         p11 = self.texels[j1 * s + i1]
         out = []
         for c in range(4):
-            top = p00[c] * (1.0 - tx) + p10[c] * tx
-            bot = p01[c] * (1.0 - tx) + p11[c] * tx
-            out.append(top * (1.0 - ty) + bot * ty)
+            omt = sub(1.0, tx)
+            omty = sub(1.0, ty)
+            top = add(mul(p00[c], omt), mul(p10[c], tx))
+            bot = add(mul(p01[c], omt), mul(p11[c], tx))
+            out.append(add(mul(top, omty), mul(bot, ty)))
         return tuple(out)
 
 
@@ -129,12 +195,48 @@ def _normalize(v, ftype):
     return (v[0] / l, v[1] / l, v[2] / l)
 
 
+def _fast_exp(x):
+    """Fast-math exponent via base-2 decomposition + truncated series.
+
+    Standard library only, no platform exp.  Returns exp(x) with relative
+    error ~1e-4 over the exponent range used for specular peaks -- large
+    enough to move a highlight, small enough to stay plausible.
+    """
+    y = x * 1.4426950408889634  # log2(e)
+    k = int(math.floor(y + 0.5))
+    r = (y - k) * 0.6931471805599453  # r in [-ln2/2, ln2/2]
+    # exp(r) ~ 1 + r + r^2/2 + r^3/6 + r^4/24
+    term = 1.0 + r * (1.0 + r * (0.5 + r * (1.0 / 6.0 + r * (1.0 / 24.0))))
+    return math.ldexp(term, k)
+
+
+def _fast_pow(base, power):
+    if base <= 0.0:
+        return 0.0
+    return _fast_exp(power * _fast_log(base))
+
+
+def _fast_log(x):
+    """Natural log via frexp, no platform log."""
+    m, e = math.frexp(x)
+    # m in [0.5,1); series for ln(m) around 1 by atanh transform
+    z = (m - 1.0) / (m + 1.0)
+    z2 = z * z
+    series = 2.0 * z * (1.0 + z2 * (1.0 / 3.0 + z2 * (1.0 / 5.0 +
+                                                     z2 * (1.0 / 7.0))))
+    return series + e * 0.6931471805599453
+
+
 def shade(world_pos, normal, base_rgb, light_dir, camera_pos, ftype,
-          spec_power, spec_intensity):
+          spec_power, spec_intensity, fast_math=False):
     """Blinn-Phong in linear HDR space.  ftype selects f64 or f32 arithmetic.
 
     Out-of-gamut energy is allowed to exceed 1.0 here; tone mapping happens
-    later in `tone_map`, identical for both paths.
+    later in `tone_map`, identical for both paths unless a profile declares
+    otherwise.  ``fast_math`` swaps the specular exponent for a declared
+    approximation (approximate log/exp, one Newton reciprocal) and reassociates
+    the dot product -- exactly the class of deviation a "fast math" build
+    introduces.
     """
     if ftype == "f32":
         add, mul, dot = f32add, f32mul, f32dot3
@@ -150,7 +252,10 @@ def shade(world_pos, normal, base_rgb, light_dir, camera_pos, ftype,
         ndl = max(dot(n, L), 0.0)
         ndh = max(dot(n, H), 0.0)
         diff = [mul(base_rgb[c], f32(0.15 + 0.85 * ndl)) for c in range(3)]
-        spec = spec_intensity * (ndh ** spec_power)
+        if fast_math:
+            spec = spec_intensity * _fast_pow(ndh, spec_power)
+        else:
+            spec = spec_intensity * (ndh ** spec_power)
         return [f32add(diff[c], f32(spec)) for c in range(3)]
 
     n = _normalize(normal, "f64")
@@ -160,18 +265,31 @@ def shade(world_pos, normal, base_rgb, light_dir, camera_pos, ftype,
          camera_pos[2] - world_pos[2])
     V = _normalize(e, "f64")
     H = _normalize((L[0] + V[0], L[1] + V[1], L[2] + V[2]), "f64")
-    ndl = max(n[0] * L[0] + n[1] * L[1] + n[2] * L[2], 0.0)
-    ndh = max(n[0] * H[0] + n[1] * H[1] + n[2] * H[2], 0.0)
+    if fast_math:
+        # Reassociated (pairwise-approximate) dot to mimic a fast-math build.
+        ndl = max((n[0] * L[0]) + (n[1] * L[1] + n[2] * L[2]), 0.0)
+        ndh = max((n[0] * H[0]) + (n[1] * H[1] + n[2] * H[2]), 0.0)
+    else:
+        ndl = max(n[0] * L[0] + n[1] * L[1] + n[2] * L[2], 0.0)
+        ndh = max(n[0] * H[0] + n[1] * H[1] + n[2] * H[2], 0.0)
     out = []
     for c in range(3):
         diffuse = base_rgb[c] * (0.15 + 0.85 * ndl)
-        specular = spec_intensity * (ndh ** spec_power)
+        if fast_math:
+            specular = spec_intensity * _fast_pow(ndh, spec_power)
+        else:
+            specular = spec_intensity * (ndh ** spec_power)
         out.append(diffuse + specular)
     return out
 
 
-def tone_map(linear_rgb, exposure=1.0):
-    """Reinhard extended to preserve HDR, then sRGB OETF.  Shared verbatim."""
+def tone_map(linear_rgb, exposure=1.0, fast_math=False):
+    """Reinhard extended to preserve HDR, then sRGB OETF.  Shared verbatim.
+
+    ``fast_math`` replaces the sRGB gamma exponent with the exp/log
+    approximation pair; that is an explicit declared deviation and is reported,
+    not hidden.
+    """
     out = []
     for c in linear_rgb:
         x = c * exposure
@@ -179,9 +297,24 @@ def tone_map(linear_rgb, exposure=1.0):
         if mapped <= 0.0031308:
             s = 12.92 * mapped
         else:
-            s = 1.055 * (mapped ** (1.0 / 2.4)) - 0.055
+            if fast_math:
+                s = 1.055 * _fast_exp((1.0 / 2.4) * _fast_log(mapped)) - 0.055
+            else:
+                s = 1.055 * (mapped ** (1.0 / 2.4)) - 0.055
         out.append(clamp(s, 0.0, 1.0))
     return out
+
+
+def convert_depth(ndc_z, convention):
+    """Window depth from NDC z under the declared convention.
+
+    ``ndc_minus1_1`` keeps OpenGL [-1,1]; ``ndc_0_1`` applies the D3D/Vulkan
+    remap z' = (z + 1) / 2.  The remap happens *after* perspective-correct
+    interpolation of ndc_z, which is where a convention bug actually lives.
+    """
+    if convention == "ndc_0_1":
+        return (ndc_z + 1.0) * 0.5
+    return ndc_z
 
 
 # --------------------------------------------------------------------------
